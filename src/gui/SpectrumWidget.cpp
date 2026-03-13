@@ -82,7 +82,8 @@ QRgb SpectrumWidget::dbmToRgb(float dbm) const
     // Use HSV: hue sweeps 240° (blue) → 0° (red) as t goes 0 → 1.
     // Value ramps up for the first 10% so very cold signals show as near-black.
     const float hue = (1.0f - t) * 240.0f;
-    const float val = qBound(0.0f, t * 5.0f, 1.0f);
+    // Minimum 8% brightness so noise floor shows as dim blue rather than pure black
+    const float val = qBound(0.08f, t * 5.0f + 0.08f, 1.0f);
     return QColor::fromHsvF(hue / 360.0f, 1.0f, val).rgba();
 }
 
@@ -188,7 +189,7 @@ void SpectrumWidget::drawSpectrum(QPainter& p, const QRect& r)
         const float dbm  = m_smoothed[i];
         const float norm = qBound(0.0f, (m_refLevel - dbm) / m_dynamicRange, 1.0f);
         const int   x    = r.left() + static_cast<int>(static_cast<float>(i) / n * w);
-        const int   y    = r.top()  + static_cast<int>(norm * h);
+        const int   y    = r.top()  + qMin(static_cast<int>(norm * h), h - 1);
 
         if (first) { path.moveTo(x, y); first = false; }
         else        path.lineTo(x, y);

@@ -8,6 +8,7 @@
 #include <QString>
 #include <QList>
 #include <QMap>
+#include <QTimer>
 
 namespace AetherSDR {
 
@@ -72,6 +73,8 @@ private:
     void handleMeterStatus(const QMap<QString, QString>& kvs);
     void handlePanadapterStatus(const QMap<QString, QString>& kvs);
 
+    void configurePan();
+
     // Standalone mode: create a panadapter then attach a slice to it.
     void createDefaultSlice(const QString& freqMhz = "14.225000",
                             const QString& mode    = "USB",
@@ -92,6 +95,10 @@ private:
     bool    m_panResized{false}; // true once we've sent the resize command
 
     QList<SliceModel*> m_slices;
+
+    RadioInfo m_lastInfo;               // stored for auto-reconnect
+    bool      m_intentionalDisconnect{false};
+    QTimer    m_reconnectTimer;
 };
 
 } // namespace AetherSDR

@@ -18,6 +18,15 @@ RadioModel::RadioModel(QObject* parent)
             this, &RadioModel::onConnectionError);
     connect(&m_connection, &RadioConnection::versionReceived,
             this, &RadioModel::onVersionReceived);
+
+    m_reconnectTimer.setSingleShot(true);
+    m_reconnectTimer.setInterval(3000);
+    connect(&m_reconnectTimer, &QTimer::timeout, this, [this]() {
+        if (!m_intentionalDisconnect && !m_lastInfo.address.isNull()) {
+            qDebug() << "RadioModel: auto-reconnecting to" << m_lastInfo.address.toString();
+            m_connection.connectToRadio(m_lastInfo);
+        }
+    });
 }
 
 bool RadioModel::isConnected() const
@@ -36,6 +45,9 @@ SliceModel* RadioModel::slice(int id) const
 
 void RadioModel::connectToRadio(const RadioInfo& info)
 {
+    m_lastInfo = info;
+    m_intentionalDisconnect = false;
+    m_reconnectTimer.stop();
     m_name  = info.name;
     m_model = info.model;
     m_connection.connectToRadio(info);
@@ -43,6 +55,8 @@ void RadioModel::connectToRadio(const RadioInfo& info)
 
 void RadioModel::disconnectFromRadio()
 {
+    m_intentionalDisconnect = true;
+    m_reconnectTimer.stop();
     m_connection.disconnectFromRadio();
 }
 
@@ -56,72 +70,75 @@ void RadioModel::setTransmit(bool tx)
 void RadioModel::onConnected()
 {
     qDebug() << "RadioModel: connected";
+    m_panResized = false;
     emit connectionStateChanged(true);
 
-    // Register as a GUI client — required before the radio will allow
-    // panadapter / slice creation. Must be sent before "slice list".
-    m_connection.sendCommand("client gui");
+    // Full command sequence — each step waits for its R response before sending the next.
+    // sub slice all → sub tx all → sub atu all → sub meter all → sub audio all
+    //   → client gui → client udpport N → slice list → flush pending commands
+    m_connection.sendCommand("sub slice all", [this](int, const QString&) {
+      m_connection.sendCommand("sub tx all", [this](int, const QString&) {
+        m_connection.sendCommand("sub atu all", [this](int, const QString&) {
+          m_connection.sendCommand("sub meter all", [this](int, const QString&) {
+            m_connection.sendCommand("sub audio all", [this](int, const QString&) {
+            m_connection.sendCommand("client gui", [this](int code, const QString&) {
+        if (code != 0)
+            qWarning() << "RadioModel: client gui failed, code" << Qt::hex << code;
 
-    // Identify this client to the radio (cosmetic; error is non-fatal).
-    m_connection.sendCommand("client program AetherSDR");
+        if (!m_panStream.isRunning())
+            m_panStream.start(&m_connection);
 
-    // Start the VITA-49 UDP listener.
-    // For SmartSDR v1.4 LAN: bind port 4991 and send a UDP registration packet
-    // to the radio so it learns our address. "client set udpport" is not supported
-    // on v1.4.0.0 (returns error 50001000).
-    m_panResized = false;
-    if (!m_panStream.isRunning()) {
-        m_panStream.start(&m_connection);
-
-        // Attempt to register our UDP port with the radio via the TCP command
-        // channel. Returns error 50001000 on firmware v1.4.0.0 (not supported)
-        // but is worth trying — the UDP registration packet sent by start() is
-        // the primary mechanism on that firmware.
         const quint16 udpPort = m_panStream.localPort();
-        if (udpPort != 0) {
-            m_connection.sendCommand(
-                QString("client set udpport=%1").arg(udpPort),
-                [udpPort](int code, const QString& body) {
-                    if (code == 0)
-                        qDebug() << "RadioModel: UDP port" << udpPort << "registered via client set";
-                    else
-                        qDebug() << "RadioModel: client set udpport returned"
-                                 << Qt::hex << code << body
-                                 << "(UDP registration packet used instead)";
-                });
-        }
-    }
+        m_connection.sendCommand(
+            QString("client udpport %1").arg(udpPort),
+            [this, udpPort](int code2, const QString&) {
+                if (code2 == 0)
+                    qDebug() << "RadioModel: UDP port" << udpPort << "registered via client udpport";
+                else
+                    qDebug() << "RadioModel: client udpport returned error" << Qt::hex << code2;
 
-    // Request the current slice list.
-    // SmartConnect mode: body = "0 1 2 3" — request each slice's state.
-    // Standalone mode:   body = ""        — no slices exist, create one.
-    m_connection.sendCommand("slice list",
-        [this](int code, const QString& body) {
-            if (code != 0) {
-                qWarning() << "RadioModel: slice list failed, code" << Qt::hex << code;
-                return;
-            }
-            const QStringList ids = body.trimmed().split(' ', Qt::SkipEmptyParts);
-            qDebug() << "RadioModel: slice list ->" << (ids.isEmpty() ? "(empty)" : body);
+                m_connection.sendCommand("slice list",
+                    [this](int code3, const QString& body) {
+                        if (code3 != 0) {
+                            qWarning() << "RadioModel: slice list failed, code" << Qt::hex << code3;
+                            return;
+                        }
+                        const QStringList ids = body.trimmed().split(' ', Qt::SkipEmptyParts);
+                        qDebug() << "RadioModel: slice list ->" << (ids.isEmpty() ? "(empty)" : body);
 
-            if (ids.isEmpty()) {
-                // Standalone mode: no slices — create panadapter + slice.
-                createDefaultSlice();
-            } else {
-                // SmartConnect mode: request current state for each existing slice.
-                for (const QString& idStr : ids) {
-                    bool ok = false;
-                    const int id = idStr.toInt(&ok);
-                    if (ok) m_connection.sendCommand(QString("slice get %1").arg(id));
-                }
-            }
-        });
+                        if (ids.isEmpty()) {
+                            createDefaultSlice();
+                        } else {
+                            qDebug() << "RadioModel: SmartConnect — keeping existing pan"
+                                     << m_panId << "and" << m_slices.size() << "slice(s)";
+                        }
 
-    // Flush any slice commands that queued up before we connected.
-    for (auto* s : m_slices) {
-        for (const QString& cmd : s->drainPendingCommands())
-            m_connection.sendCommand(cmd);
-    }
+                        for (auto* s : m_slices) {
+                            for (const QString& cmd : s->drainPendingCommands())
+                                m_connection.sendCommand(cmd);
+                        }
+
+                        // Request a remote audio RX stream (uncompressed).
+                        // The radio creates an ExtDataWithStream VITA-49 stream
+                        // (PCC 0x03E3, float32 stereo big-endian) and sends it
+                        // to our registered UDP port.
+                        m_connection.sendCommand(
+                            "stream create type=remote_audio_rx compression=none",
+                            [](int code, const QString& body) {
+                                if (code == 0)
+                                    qDebug() << "RadioModel: remote_audio_rx stream created, id:" << body;
+                                else
+                                    qWarning() << "RadioModel: stream create remote_audio_rx failed, code"
+                                               << Qt::hex << code << "body:" << body;
+                            });
+                    });
+            });
+    }); // client gui
+            }); // sub audio all
+          }); // sub meter all
+        }); // sub atu all
+      }); // sub tx all
+    }); // sub slice all
 }
 
 void RadioModel::onDisconnected()
@@ -131,6 +148,11 @@ void RadioModel::onDisconnected()
     m_panId.clear();
     m_panResized = false;
     emit connectionStateChanged(false);
+
+    if (!m_intentionalDisconnect && !m_lastInfo.address.isNull()) {
+        qDebug() << "RadioModel: unexpected disconnect — reconnecting in 3s";
+        m_reconnectTimer.start();
+    }
 }
 
 void RadioModel::onConnectionError(const QString& msg)
@@ -268,18 +290,27 @@ void RadioModel::handlePanadapterStatus(const QMap<QString, QString>& kvs)
     }
     Q_UNUSED(levelChanged)
 
-    // On the first full panadapter status we know the pan ID.  Send a resize
-    // command to request a higher-resolution FFT (radio default is only 50 bins).
-    if (!m_panResized && !m_panId.isEmpty() && kvs.contains("x_pixels")
-        && m_connection.isConnected())
-    {
+    // Configure the panadapter once we know its ID.
+    // x_pixels is not settable on firmware v1.4.0.0 (always returns 5000002D),
+    // so we only set fps and disable averaging.
+    if (!m_panResized && !m_panId.isEmpty() && m_connection.isConnected()) {
         m_panResized = true;
-        // Request 1024 bins at 25 fps — gives ~190 Hz/bin at 200 kHz bandwidth.
-        const QString cmd = QString("display pan set %1 x_pixels=1024 y_pixels=384 fps=25")
-                                .arg(m_panId);
-        qDebug() << "RadioModel: requesting pan resize ->" << cmd;
-        m_connection.sendCommand(cmd);
+        configurePan();
     }
+}
+
+void RadioModel::configurePan()
+{
+    if (m_panId.isEmpty()) return;
+    m_connection.sendCommand(
+        QString("display pan set %1 fps=25").arg(m_panId),
+        [this](int code, const QString&) {
+            if (code != 0)
+                qWarning() << "RadioModel: display pan set fps=25 failed, code" << Qt::hex << code;
+            if (!m_panId.isEmpty())
+                m_connection.sendCommand(
+                    QString("display pan set %1 average=0").arg(m_panId));
+        });
 }
 
 // ─── Standalone mode: create panadapter + slice ───────────────────────────────

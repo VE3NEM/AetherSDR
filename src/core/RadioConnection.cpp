@@ -140,16 +140,10 @@ void RadioConnection::processLine(const QString& line)
         qDebug() << "RadioConnection: assigned handle" << QString::number(m_handle, 16);
         setState(ConnectionState::Connected);
         m_heartbeat.start();
+        // Full command sequence (sub → client gui → udpport → slice list) is
+        // orchestrated by RadioModel::onConnected() so every command waits for
+        // its R response before the next is sent.
         emit connected();
-
-        // Subscribe to essential status streams after connection.
-        // "sub panadapter all" is invalid on API v1.x — omitted.
-        sendCommand("sub slice all");
-        sendCommand("sub tx all");
-        sendCommand("sub atu all");
-        sendCommand("sub meter all");
-        // Higher-level requests (client identity, slice list) are sent
-        // by RadioModel::onConnected() where response callbacks are available.
         break;
 
     case MessageType::Response: {

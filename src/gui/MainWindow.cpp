@@ -70,6 +70,13 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&m_radioModel, &RadioModel::panadapterLevelChanged,
             m_spectrum, &SpectrumWidget::setDbmRange);
 
+    // ── Panadapter stream → audio engine ──────────────────────────────────
+    // All VITA-49 traffic arrives on the single client udpport socket owned
+    // by PanadapterStream. It strips the header from IF-Data packets and emits
+    // audioDataReady(); we feed that directly to the QAudioSink.
+    connect(m_radioModel.panStream(), &PanadapterStream::audioDataReady,
+            &m_audio, &AudioEngine::feedAudioData);
+
     // ── Audio level meter ──────────────────────────────────────────────────
     connect(&m_audio, &AudioEngine::levelChanged,
             this, &MainWindow::onAudioLevel);
@@ -294,10 +301,12 @@ void MainWindow::onConnectionStateChanged(bool connected)
         m_connStatusLabel->setText("Connected");
         m_radioInfoLabel->setText(info);
         m_connPanel->setStatusText("Connected");
+        m_audio.startRxStream();
     } else {
         m_connStatusLabel->setText("Disconnected");
         m_radioInfoLabel->setText("");
         m_connPanel->setStatusText("Not connected");
+        m_audio.stopRxStream();
     }
 }
 
