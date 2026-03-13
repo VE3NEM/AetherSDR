@@ -3,7 +3,6 @@
 #include <QWidget>
 
 class QPushButton;
-class QComboBox;
 class QSlider;
 class QLabel;
 
@@ -55,9 +54,12 @@ private:
     SliceModel* m_slice{nullptr};
     QStringList m_antList{"ANT1", "ANT2"};   // populated from ant_list key
 
-    // Step sizes available in the combo (Hz)
+    // Step sizes available in the stepper (Hz)
     static constexpr int STEP_SIZES[9] = {10, 50, 100, 250, 500, 1000, 2500, 5000, 10000};
-    QComboBox* m_stepCombo{nullptr};
+    int          m_stepIdx{2};          // index into STEP_SIZES, default 100 Hz
+    QPushButton* m_stepDown{nullptr};   // "<" button
+    QLabel*      m_stepLabel{nullptr};  // current step value display
+    QPushButton* m_stepUp{nullptr};     // ">" button
 
     // ── Header row ────────────────────────────────────────────────────────
     QLabel*      m_sliceBadge{nullptr};   // "A" / "B" / "C" / "D"

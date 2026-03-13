@@ -24,6 +24,9 @@ public:
     double frequency() const { return m_frequency; }
     void   setFrequency(double mhz);
 
+    // Step size used when scrolling with no digit column active (Hz).
+    void setStepSize(int hz) { m_stepHz = hz; }
+
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
 
@@ -62,6 +65,7 @@ private:
 
     double  m_frequency{14.225};  // MHz
     int     m_activeColumn{-1};   // column highlighted by mouse
+    int     m_stepHz{100};        // step size for wheel with no active column
     bool    m_editing{false};
     QString m_editBuffer;
 };

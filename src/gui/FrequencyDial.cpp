@@ -221,13 +221,16 @@ void FrequencyDial::mouseDoubleClickEvent(QMouseEvent*)
 
 void FrequencyDial::wheelEvent(QWheelEvent* ev)
 {
-    if (m_activeColumn < 0) return;
-
     const int steps = ev->angleDelta().y() / 120;
-    if (steps == 0) return;
+    if (steps == 0) { ev->ignore(); return; }
 
-    const double delta = placeValueMhz(m_activeColumn) * steps;
-    setFrequency(m_frequency + delta);
+    if (m_activeColumn >= 0) {
+        // Column selected: tune by that column's place value (original behaviour).
+        setFrequency(m_frequency + placeValueMhz(m_activeColumn) * steps);
+    } else {
+        // No column active: tune by the configured step size.
+        setFrequencyHz(frequencyHz() + static_cast<long long>(steps) * m_stepHz);
+    }
     ev->accept();
 }
 

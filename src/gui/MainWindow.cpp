@@ -88,11 +88,14 @@ MainWindow::MainWindow(QWidget* parent)
         m_audio.setRxVolume(v / 100.0f);
     });
 
-    // ── Tuning step size → spectrum widget ────────────────────────────────
+    // ── Tuning step size → spectrum widget + freq dial ────────────────────
     connect(m_appletPanel->rxApplet(), &RxApplet::stepSizeChanged,
             m_spectrum, &SpectrumWidget::setStepSize);
-    // Initialise spectrum with the applet's default step (100 Hz, index 2).
+    connect(m_appletPanel->rxApplet(), &RxApplet::stepSizeChanged,
+            m_freqDial, &FrequencyDial::setStepSize);
+    // Initialise both with the applet's default step (100 Hz, index 2).
     m_spectrum->setStepSize(100);
+    m_freqDial->setStepSize(100);
 
     // ── Antenna list from radio → applet panel ─────────────────────────────
     connect(&m_radioModel, &RadioModel::antListChanged,

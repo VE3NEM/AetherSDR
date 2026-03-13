@@ -2,7 +2,6 @@
 #include "models/SliceModel.h"
 
 #include <QPushButton>
-#include <QComboBox>
 #include <QSlider>
 #include <QLabel>
 #include <QVBoxLayout>
@@ -201,18 +200,38 @@ void RxApplet::buildUI()
         lbl->setFixedWidth(34);
         row->addWidget(lbl);
 
-        m_stepCombo = new QComboBox;
-        m_stepCombo->setFixedHeight(22);
-        m_stepCombo->setStyleSheet("font-size: 11px;");
-        const char* labels[] = {"10","50","100","250","500","1K","2.5K","5K","10K"};
-        for (int i = 0; i < 9; ++i)
-            m_stepCombo->addItem(labels[i], STEP_SIZES[i]);
-        m_stepCombo->setCurrentIndex(2);   // default 100 Hz
-        connect(m_stepCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-                this, [this](int idx) {
-            emit stepSizeChanged(m_stepCombo->itemData(idx).toInt());
+        m_stepDown  = mkStep("<");
+        m_stepLabel = new QLabel("100 Hz");
+        m_stepLabel->setAlignment(Qt::AlignCenter);
+        m_stepLabel->setStyleSheet(
+            "QLabel { font-size: 11px; background: #0a0a18; border: 1px solid #1e2e3e; "
+            "border-radius: 3px; padding: 1px 3px; }");
+        m_stepUp = mkStep(">");
+
+        // Helper: format a step value compactly.
+        auto fmtStep = [](int hz) -> QString {
+            if (hz >= 1000) return QString("%1K").arg(hz / 1000);
+            return QString("%1 Hz").arg(hz);
+        };
+
+        connect(m_stepDown, &QPushButton::clicked, this, [this, fmtStep] {
+            if (m_stepIdx > 0) {
+                m_stepIdx--;
+                m_stepLabel->setText(fmtStep(STEP_SIZES[m_stepIdx]));
+                emit stepSizeChanged(STEP_SIZES[m_stepIdx]);
+            }
         });
-        row->addWidget(m_stepCombo, 1);
+        connect(m_stepUp, &QPushButton::clicked, this, [this, fmtStep] {
+            if (m_stepIdx < 8) {
+                m_stepIdx++;
+                m_stepLabel->setText(fmtStep(STEP_SIZES[m_stepIdx]));
+                emit stepSizeChanged(STEP_SIZES[m_stepIdx]);
+            }
+        });
+
+        row->addWidget(m_stepDown);
+        row->addWidget(m_stepLabel, 1);
+        row->addWidget(m_stepUp);
         root->addLayout(row);
     }
 
