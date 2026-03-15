@@ -1,4 +1,5 @@
 #include "SpectrumWidget.h"
+#include "SpectrumOverlayMenu.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -25,6 +26,10 @@ SpectrumWidget::SpectrumWidget(QWidget* parent)
     QSettings settings;
     m_spectrumFrac = std::clamp(
         settings.value("spectrum/splitRatio", 0.40).toFloat(), 0.10f, 0.90f);
+
+    // Floating overlay menu (child widget, stays on top)
+    m_overlayMenu = new SpectrumOverlayMenu(this);
+    m_overlayMenu->raise();
 }
 
 void SpectrumWidget::setFrequencyRange(double centerMhz, double bandwidthMhz)
@@ -871,10 +876,14 @@ void SpectrumWidget::drawOffScreenVfo(QPainter& p, const QRect& specRect)
     const int boxH = bigFm.height() + smallFm.height() + 4;
 
     int boxX;
-    if (vfoIsRight)
+    if (vfoIsRight) {
         boxX = specRect.right() - DBM_STRIP_W - boxW - 4;
-    else
-        boxX = specRect.left() + 4;
+    } else {
+        int leftMargin = 4;
+        if (m_overlayMenu && m_overlayMenu->isVisible())
+            leftMargin = m_overlayMenu->width() + 2;
+        boxX = specRect.left() + leftMargin;
+    }
 
     m_offScreenVfoRect = QRect(boxX, boxY, boxW, boxH);
 

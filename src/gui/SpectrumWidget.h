@@ -6,6 +6,8 @@
 
 namespace AetherSDR {
 
+class SpectrumOverlayMenu;
+
 // Panadapter / spectrum display widget.
 //
 // Layout (top to bottom):
@@ -56,6 +58,9 @@ public:
 
     // Set the current demod mode (for zoom centering behavior).
     void setMode(const QString& mode) { m_mode = mode; }
+
+    // Access the floating overlay menu (for wiring signals).
+    SpectrumOverlayMenu* overlayMenu() const { return m_overlayMenu; }
 
     // Set slice info for the off-screen VFO indicator.
     void setSliceInfo(int sliceId, bool isTxSlice) {
@@ -163,6 +168,9 @@ private:
     // Off-screen VFO indicator hit rect (for hover/double-click)
     QRect m_offScreenVfoRect;
     bool  m_hoveringOffScreenVfo{false};
+
+    // Floating overlay menu (child widget, anchored top-left)
+    SpectrumOverlayMenu* m_overlayMenu{nullptr};
 };
 
 } // namespace AetherSDR

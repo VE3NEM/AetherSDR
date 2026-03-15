@@ -1295,13 +1295,19 @@ void RxApplet::applyFilterPreset(int widthHz)
     int lo, hi;
     const QString& mode = m_slice->mode();
 
-    if (mode == "LSB" || mode == "DIGL" || mode == "CWL") {
+    if (mode == "LSB" || mode == "DIGL") {
         lo = -widthHz;
         hi = 0;
     } else if (mode == "CW") {
-        // Centred 200 Hz above carrier (600 Hz sidetone pitch)
-        lo = 200;
-        hi = 200 + widthHz;
+        // Centered on CW pitch (default 600 Hz)
+        int pitch = m_txModel ? m_txModel->cwPitch() : 600;
+        lo = pitch - widthHz / 2;
+        hi = pitch + widthHz / 2;
+    } else if (mode == "CWL") {
+        // Centered on negative CW pitch
+        int pitch = m_txModel ? m_txModel->cwPitch() : 600;
+        lo = -(pitch + widthHz / 2);
+        hi = -(pitch - widthHz / 2);
     } else if (mode == "AM" || mode == "SAM" || mode == "DSB") {
         // Double-sideband: split width equally around carrier
         lo = -(widthHz / 2);

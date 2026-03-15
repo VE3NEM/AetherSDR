@@ -2,6 +2,7 @@
 #include "ConnectionPanel.h"
 #include "PanadapterApplet.h"
 #include "SpectrumWidget.h"
+#include "SpectrumOverlayMenu.h"
 #include "AppletPanel.h"
 #include "RxApplet.h"
 #include "SMeterWidget.h"
@@ -125,6 +126,15 @@ MainWindow::MainWindow(QWidget* parent)
     // ── Click-to-tune on the spectrum ─────────────────────────────────────
     connect(spectrum(), &SpectrumWidget::frequencyClicked,
             this, &MainWindow::onFrequencyChanged);
+
+    // ── Band selection from overlay menu ───────────────────────────────────
+    connect(spectrum()->overlayMenu(), &SpectrumOverlayMenu::bandSelected,
+            this, [this](double freqMhz, const QString& mode) {
+        if (auto* s = activeSlice()) {
+            s->setMode(mode);
+        }
+        onFrequencyChanged(freqMhz);
+    });
 
     // ── Panadapter stream → audio engine ──────────────────────────────────
     // All VITA-49 traffic arrives on the single client udpport socket owned
