@@ -140,6 +140,22 @@ void SliceModel::setAnft(bool on)
     emit anftChanged(on);
 }
 
+void SliceModel::setApf(bool on)
+{
+    m_apf = on;
+    sendCommand(QString("slice set %1 apf=%2").arg(m_id).arg(on ? 1 : 0));
+    emit apfChanged(on);
+}
+
+void SliceModel::setApfLevel(int v)
+{
+    v = std::clamp(v, 0, 100);
+    if (m_apfLevel == v) return;
+    m_apfLevel = v;
+    sendCommand(QString("slice set %1 apf_level=%2").arg(m_id).arg(v));
+    emit apfLevelChanged(v);
+}
+
 void SliceModel::setNbLevel(int v)
 {
     v = std::clamp(v, 0, 100);
@@ -254,6 +270,38 @@ void SliceModel::setDaxChannel(int ch)
     m_daxChannel = ch;
     sendCommand(QString("slice set %1 dax=%2").arg(m_id).arg(ch));
     emit daxChannelChanged(ch);
+}
+
+void SliceModel::setRttyMark(int hz)
+{
+    if (m_rttyMark == hz) return;
+    m_rttyMark = hz;
+    sendCommand(QString("slice set %1 rtty_mark=%2").arg(m_id).arg(hz));
+    emit rttyMarkChanged(hz);
+}
+
+void SliceModel::setRttyShift(int hz)
+{
+    if (m_rttyShift == hz) return;
+    m_rttyShift = hz;
+    sendCommand(QString("slice set %1 rtty_shift=%2").arg(m_id).arg(hz));
+    emit rttyShiftChanged(hz);
+}
+
+void SliceModel::setDiglOffset(int hz)
+{
+    if (m_diglOffset == hz) return;
+    m_diglOffset = hz;
+    sendCommand(QString("slice set %1 digl_offset=%2").arg(m_id).arg(hz));
+    emit diglOffsetChanged(hz);
+}
+
+void SliceModel::setDiguOffset(int hz)
+{
+    if (m_diguOffset == hz) return;
+    m_diguOffset = hz;
+    sendCommand(QString("slice set %1 digu_offset=%2").arg(m_id).arg(hz));
+    emit diguOffsetChanged(hz);
 }
 
 void SliceModel::setTxSlice(bool on)
@@ -455,6 +503,14 @@ void SliceModel::applyStatus(const QMap<QString, QString>& kvs)
         m_anft = kvs["anft"] == "1";
         emit anftChanged(m_anft);
     }
+    if (kvs.contains("apf")) {
+        bool v = kvs["apf"] == "1";
+        if (m_apf != v) { m_apf = v; emit apfChanged(v); }
+    }
+    if (kvs.contains("apf_level")) {
+        int v = kvs["apf_level"].toInt();
+        if (m_apfLevel != v) { m_apfLevel = v; emit apfLevelChanged(v); }
+    }
     // DSP level parsing
     if (kvs.contains("nb_level")) {
         int v = kvs["nb_level"].toInt();
@@ -510,6 +566,22 @@ void SliceModel::applyStatus(const QMap<QString, QString>& kvs)
     if (kvs.contains("dax")) {
         int ch = kvs["dax"].toInt();
         if (m_daxChannel != ch) { m_daxChannel = ch; emit daxChannelChanged(ch); }
+    }
+    if (kvs.contains("rtty_mark")) {
+        int v = kvs["rtty_mark"].toInt();
+        if (m_rttyMark != v) { m_rttyMark = v; emit rttyMarkChanged(v); }
+    }
+    if (kvs.contains("rtty_shift")) {
+        int v = kvs["rtty_shift"].toInt();
+        if (m_rttyShift != v) { m_rttyShift = v; emit rttyShiftChanged(v); }
+    }
+    if (kvs.contains("digl_offset")) {
+        int v = kvs["digl_offset"].toInt();
+        if (m_diglOffset != v) { m_diglOffset = v; emit diglOffsetChanged(v); }
+    }
+    if (kvs.contains("digu_offset")) {
+        int v = kvs["digu_offset"].toInt();
+        if (m_diguOffset != v) { m_diguOffset = v; emit diguOffsetChanged(v); }
     }
 
     // FM duplex/repeater status

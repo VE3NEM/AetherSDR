@@ -9,6 +9,7 @@ class QLabel;
 class QStackedWidget;
 class QSlider;
 class QComboBox;
+class QDoubleSpinBox;
 class QGridLayout;
 
 namespace AetherSDR {
@@ -97,6 +98,29 @@ private:
     QPushButton* m_nrfBtn{nullptr};
     QPushButton* m_anflBtn{nullptr};
     QPushButton* m_anftBtn{nullptr};
+    QPushButton* m_apfBtn{nullptr};
+    QWidget* m_apfContainer{nullptr};
+    QSlider* m_apfSlider{nullptr};
+    QLabel*  m_apfValueLbl{nullptr};
+    // DSP grid re-layout
+    QGridLayout* m_dspGrid{nullptr};
+    void relayoutDspGrid();
+    // RTTY Mark/Shift (shown only in RTTY mode)
+    QWidget* m_rttyContainer{nullptr};
+    // DIG offset (shown only in DIGL/DIGU mode)
+    QWidget* m_digContainer{nullptr};
+    QLabel*  m_digOffsetLabel{nullptr};
+    // FM OPT controls (shown only in FM/NFM mode)
+    QWidget*       m_fmContainer{nullptr};
+    QComboBox*     m_fmToneModeCmb{nullptr};
+    QComboBox*     m_fmToneValueCmb{nullptr};
+    QDoubleSpinBox* m_fmOffsetSpin{nullptr};
+    QPushButton*   m_fmOffsetDown{nullptr};
+    QPushButton*   m_fmSimplexBtn{nullptr};
+    QPushButton*   m_fmOffsetUp{nullptr};
+    QPushButton*   m_fmRevBtn{nullptr};
+    QLabel*  m_markLabel{nullptr};
+    QLabel*  m_shiftLabel{nullptr};
     // Mode tab
     QComboBox* m_modeCombo{nullptr};
     QGridLayout* m_filterGrid{nullptr};

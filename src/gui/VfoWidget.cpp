@@ -12,6 +12,7 @@
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QMenu>
+#include <QDoubleSpinBox>
 #include <QSignalBlocker>
 #include <QDir>
 #include <QFile>
@@ -427,12 +428,15 @@ void VfoWidget::buildTabContent()
         m_tabStack->addWidget(m_audioTab);
     }
 
-    // Tab 1: DSP — 4-column grid matching SmartSDR layout
+    // Tab 1: DSP — 4-column grid + RTTY Mark/Shift (mode-dependent)
     {
         auto* dspTab = new QWidget;
-        auto* grid = new QGridLayout(dspTab);
-        grid->setContentsMargins(2, 2, 2, 2);
-        grid->setSpacing(3);
+        auto* dspVb = new QVBoxLayout(dspTab);
+        dspVb->setContentsMargins(2, 2, 2, 2);
+        dspVb->setSpacing(3);
+
+        m_dspGrid = new QGridLayout;
+        m_dspGrid->setSpacing(3);
 
         auto makeDsp = [&](const QString& text) {
             auto* b = new QPushButton(text);
@@ -442,20 +446,334 @@ void VfoWidget::buildTabContent()
             return b;
         };
 
-        // Row 0: NR, NB, ANF, NRL
-        m_nrBtn  = makeDsp("NR");   grid->addWidget(m_nrBtn,  0, 0);
-        m_nbBtn  = makeDsp("NB");   grid->addWidget(m_nbBtn,  0, 1);
-        m_anfBtn = makeDsp("ANF");  grid->addWidget(m_anfBtn, 0, 2);
-        m_nrlBtn = makeDsp("NRL");  grid->addWidget(m_nrlBtn, 0, 3);
+        m_nrBtn   = makeDsp("NR");
+        m_nbBtn   = makeDsp("NB");
+        m_anfBtn  = makeDsp("ANF");
+        m_apfBtn  = makeDsp("APF");
+        m_nrlBtn  = makeDsp("NRL");
+        m_nrsBtn  = makeDsp("NRS");
+        m_rnnBtn  = makeDsp("RNN");
+        m_nrfBtn  = makeDsp("NRF");
+        m_anflBtn = makeDsp("ANFL");
+        m_anftBtn = makeDsp("ANFT");
+        m_apfBtn->hide();  // only visible in CW mode
 
-        // Row 1: NRS, RNN, NRF, ANFL
-        m_nrsBtn  = makeDsp("NRS");  grid->addWidget(m_nrsBtn,  1, 0);
-        m_rnnBtn  = makeDsp("RNN");  grid->addWidget(m_rnnBtn,  1, 1);
-        m_nrfBtn  = makeDsp("NRF");  grid->addWidget(m_nrfBtn,  1, 2);
-        m_anflBtn = makeDsp("ANFL"); grid->addWidget(m_anflBtn, 1, 3);
+        // Initial layout: 9 buttons in 4/4/1 grid (APF hidden)
+        m_dspGrid->addWidget(m_nrBtn,   0, 0);
+        m_dspGrid->addWidget(m_nbBtn,   0, 1);
+        m_dspGrid->addWidget(m_anfBtn,  0, 2);
+        m_dspGrid->addWidget(m_nrlBtn,  0, 3);
+        m_dspGrid->addWidget(m_nrsBtn,  1, 0);
+        m_dspGrid->addWidget(m_rnnBtn,  1, 1);
+        m_dspGrid->addWidget(m_nrfBtn,  1, 2);
+        m_dspGrid->addWidget(m_anflBtn, 1, 3);
+        m_dspGrid->addWidget(m_anftBtn, 2, 0);
+        dspVb->addLayout(m_dspGrid);
 
-        // Row 2: ANFT (alone)
-        m_anftBtn = makeDsp("ANFT"); grid->addWidget(m_anftBtn, 2, 0);
+        // APF level slider (hidden unless CW mode)
+        {
+            m_apfContainer = new QWidget;
+            auto* apfVb = new QHBoxLayout(m_apfContainer);
+            apfVb->setContentsMargins(0, 2, 0, 0);
+            apfVb->setSpacing(3);
+
+            auto* lbl = new QLabel("APF");
+            lbl->setStyleSheet(kLabelStyle);
+            lbl->setFixedWidth(26);
+            apfVb->addWidget(lbl);
+            m_apfSlider = new QSlider(Qt::Horizontal);
+            m_apfSlider->setRange(0, 100);
+            m_apfSlider->setValue(50);
+            m_apfSlider->setStyleSheet(kSliderStyle);
+            apfVb->addWidget(m_apfSlider, 1);
+            m_apfValueLbl = new QLabel("50");
+            m_apfValueLbl->setStyleSheet(kLabelStyle);
+            m_apfValueLbl->setFixedWidth(20);
+            m_apfValueLbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            apfVb->addWidget(m_apfValueLbl);
+
+            connect(m_apfSlider, &QSlider::valueChanged, this, [this](int v) {
+                m_apfValueLbl->setText(QString::number(v));
+                if (!m_updatingFromModel && m_slice) m_slice->setApfLevel(v);
+            });
+
+            m_apfContainer->hide();
+            dspVb->addWidget(m_apfContainer);
+        }
+
+        // RTTY Mark/Shift controls (hidden unless RTTY mode)
+        {
+            static const QString kStepLabelStyle =
+                "QLabel { font-size: 10px; background: #0a0a18; border: 1px solid #1e2e3e; "
+                "border-radius: 3px; padding: 0px 2px; color: #c8d8e8; }";
+            static const QString kDimLabel =
+                "QLabel { background: transparent; border: none; "
+                "color: #6888a0; font-size: 10px; font-weight: bold; }";
+
+            m_rttyContainer = new QWidget;
+            auto* rvb = new QVBoxLayout(m_rttyContainer);
+            rvb->setContentsMargins(0, 2, 0, 0);
+            rvb->setSpacing(2);
+
+            // Row 3: labels "Mark" and "Shift" side by side, centered
+            {
+                auto* lblRow = new QHBoxLayout;
+                lblRow->setContentsMargins(0, 0, 0, 0);
+                lblRow->setSpacing(4);
+                auto* markLbl = new QLabel("Mark");
+                markLbl->setStyleSheet(kDimLabel);
+                markLbl->setAlignment(Qt::AlignCenter);
+                lblRow->addWidget(markLbl, 1);
+                auto* shiftLbl = new QLabel("Shift");
+                shiftLbl->setStyleSheet(kDimLabel);
+                shiftLbl->setAlignment(Qt::AlignCenter);
+                lblRow->addWidget(shiftLbl, 1);
+                rvb->addLayout(lblRow);
+            }
+
+            // Row 4: both step selectors side by side
+            {
+                auto* selRow = new QHBoxLayout;
+                selRow->setContentsMargins(0, 0, 0, 0);
+                selRow->setSpacing(4);
+
+                // Mark selector: ◀ 2125 ▶
+                auto* markMinus = new TriBtn(TriBtn::Left);
+                selRow->addWidget(markMinus);
+                m_markLabel = new QLabel("2125");
+                m_markLabel->setAlignment(Qt::AlignCenter);
+                m_markLabel->setStyleSheet(kStepLabelStyle);
+                selRow->addWidget(m_markLabel, 1);
+                auto* markPlus = new TriBtn(TriBtn::Right);
+                selRow->addWidget(markPlus);
+
+                selRow->addSpacing(4);
+
+                // Shift selector: ◀ 170 ▶
+                auto* shiftMinus = new TriBtn(TriBtn::Left);
+                selRow->addWidget(shiftMinus);
+                m_shiftLabel = new QLabel("170");
+                m_shiftLabel->setAlignment(Qt::AlignCenter);
+                m_shiftLabel->setStyleSheet(kStepLabelStyle);
+                selRow->addWidget(m_shiftLabel, 1);
+                auto* shiftPlus = new TriBtn(TriBtn::Right);
+                selRow->addWidget(shiftPlus);
+
+                static constexpr int MARK_STEP = 25;
+                static constexpr int SHIFT_STEP = 5;
+                connect(markMinus, &QPushButton::clicked, this, [this] {
+                    if (m_slice) m_slice->setRttyMark(m_slice->rttyMark() - MARK_STEP);
+                });
+                connect(markPlus, &QPushButton::clicked, this, [this] {
+                    if (m_slice) m_slice->setRttyMark(m_slice->rttyMark() + MARK_STEP);
+                });
+                connect(shiftMinus, &QPushButton::clicked, this, [this] {
+                    if (m_slice) m_slice->setRttyShift(m_slice->rttyShift() - SHIFT_STEP);
+                });
+                connect(shiftPlus, &QPushButton::clicked, this, [this] {
+                    if (m_slice) m_slice->setRttyShift(m_slice->rttyShift() + SHIFT_STEP);
+                });
+
+                rvb->addLayout(selRow);
+            }
+
+            m_rttyContainer->hide();
+            dspVb->addWidget(m_rttyContainer);
+        }
+
+        // DIG offset control (hidden unless DIGL/DIGU mode)
+        {
+            static const QString kStepLabelStyle2 =
+                "QLabel { font-size: 10px; background: #0a0a18; border: 1px solid #1e2e3e; "
+                "border-radius: 3px; padding: 0px 2px; color: #c8d8e8; }";
+            static const QString kDimLabel2 =
+                "QLabel { background: transparent; border: none; "
+                "color: #6888a0; font-size: 10px; font-weight: bold; }";
+
+            m_digContainer = new QWidget;
+            auto* dvb = new QVBoxLayout(m_digContainer);
+            dvb->setContentsMargins(0, 2, 0, 0);
+            dvb->setSpacing(2);
+
+            auto* lbl = new QLabel("Offset");
+            lbl->setStyleSheet(kDimLabel2);
+            lbl->setAlignment(Qt::AlignCenter);
+            dvb->addWidget(lbl);
+
+            auto* row = new QHBoxLayout;
+            row->setContentsMargins(0, 0, 0, 0);
+            row->setSpacing(0);
+            auto* minus = new TriBtn(TriBtn::Left);
+            row->addWidget(minus);
+            m_digOffsetLabel = new QLabel("2210");
+            m_digOffsetLabel->setAlignment(Qt::AlignCenter);
+            m_digOffsetLabel->setStyleSheet(kStepLabelStyle2);
+            row->addWidget(m_digOffsetLabel, 1);
+            auto* plus = new TriBtn(TriBtn::Right);
+            row->addWidget(plus);
+            dvb->addLayout(row);
+
+            static constexpr int DIG_STEP = 10;
+            connect(minus, &QPushButton::clicked, this, [this] {
+                if (!m_slice) return;
+                if (m_slice->mode() == "DIGL")
+                    m_slice->setDiglOffset(m_slice->diglOffset() - DIG_STEP);
+                else
+                    m_slice->setDiguOffset(m_slice->diguOffset() - DIG_STEP);
+            });
+            connect(plus, &QPushButton::clicked, this, [this] {
+                if (!m_slice) return;
+                if (m_slice->mode() == "DIGL")
+                    m_slice->setDiglOffset(m_slice->diglOffset() + DIG_STEP);
+                else
+                    m_slice->setDiguOffset(m_slice->diguOffset() + DIG_STEP);
+            });
+
+            m_digContainer->hide();
+            dspVb->addWidget(m_digContainer);
+        }
+
+        // FM OPT controls (hidden unless FM/NFM mode)
+        {
+            static const QString kCmbStyle =
+                "QComboBox { background: #1a2a3a; border: 1px solid #205070; border-radius: 3px;"
+                " color: #c8d8e8; font-size: 10px; font-weight: bold; padding: 1px 4px; }"
+                "QComboBox::drop-down { border: none; }"
+                "QComboBox QAbstractItemView { background: #1a2a3a; color: #c8d8e8;"
+                " selection-background-color: #00b4d8; }";
+            static const QString kDirBtn =
+                "QPushButton { background: #1a2a3a; border: 1px solid #304050; border-radius: 2px;"
+                " color: #c8d8e8; font-size: 11px; font-weight: bold; padding: 2px 4px; }"
+                "QPushButton:checked { background: #0070c0; color: #ffffff; border: 1px solid #0090e0; }"
+                "QPushButton:hover { border: 1px solid #0090e0; }";
+            static const QString kRevBtn =
+                "QPushButton { background: #1a2a3a; border: 1px solid #304050; border-radius: 2px;"
+                " color: #c8d8e8; font-size: 11px; font-weight: bold; padding: 2px 4px; }"
+                "QPushButton:checked { background-color: #604000; color: #ffb800; border: 1px solid #906000; }"
+                "QPushButton:hover { border: 1px solid #0090e0; }";
+
+            m_fmContainer = new QWidget;
+            auto* fvb = new QVBoxLayout(m_fmContainer);
+            fvb->setContentsMargins(0, 0, 0, 0);
+            fvb->setSpacing(2);
+
+            // Tone mode + tone value on one row
+            auto* toneRow = new QHBoxLayout;
+            toneRow->setSpacing(2);
+            m_fmToneModeCmb = new QComboBox;
+            m_fmToneModeCmb->addItem("Off", QString("off"));
+            m_fmToneModeCmb->addItem("CTCSS TX", QString("ctcss_tx"));
+            m_fmToneModeCmb->setStyleSheet(kCmbStyle);
+            toneRow->addWidget(m_fmToneModeCmb, 1);
+
+            // Tone value — simplified list of common CTCSS tones
+            m_fmToneValueCmb = new QComboBox;
+            const double tones[] = {67.0,71.9,74.4,77.0,79.7,82.5,85.4,88.5,91.5,94.8,
+                97.4,100.0,103.5,107.2,110.9,114.8,118.8,123.0,127.3,131.8,
+                136.5,141.3,146.2,151.4,156.7,162.2,167.9,173.8,179.9,186.2,
+                192.8,203.5,206.5,210.7,218.1,225.7,229.1,233.6,241.8,250.3,254.1};
+            for (double f : tones)
+                m_fmToneValueCmb->addItem(QString::number(f, 'f', 1),
+                                           QString::number(f, 'f', 1));
+            m_fmToneValueCmb->setStyleSheet(kCmbStyle);
+            m_fmToneValueCmb->setEnabled(false);
+            toneRow->addWidget(m_fmToneValueCmb, 1);
+            fvb->addLayout(toneRow);
+
+            connect(m_fmToneModeCmb, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                    this, [this](int idx) {
+                if (m_fmToneModeCmb->signalsBlocked()) return;
+                const QString mode = m_fmToneModeCmb->itemData(idx).toString();
+                if (m_slice) m_slice->setFmToneMode(mode);
+                m_fmToneValueCmb->setEnabled(mode == "ctcss_tx");
+            });
+            connect(m_fmToneValueCmb, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                    this, [this](int idx) {
+                if (m_fmToneValueCmb->signalsBlocked()) return;
+                if (m_slice) m_slice->setFmToneValue(m_fmToneValueCmb->itemData(idx).toString());
+            });
+
+            // Offset row
+            auto* offRow = new QHBoxLayout;
+            offRow->setSpacing(4);
+            auto* offLbl = new QLabel("Offset:");
+            offLbl->setStyleSheet(kLabelStyle);
+            offRow->addWidget(offLbl);
+            m_fmOffsetSpin = new QDoubleSpinBox;
+            m_fmOffsetSpin->setRange(0.0, 100.0);
+            m_fmOffsetSpin->setDecimals(3);
+            m_fmOffsetSpin->setSingleStep(0.1);
+            m_fmOffsetSpin->setSuffix(" MHz");
+            m_fmOffsetSpin->setStyleSheet(
+                "QDoubleSpinBox { background: #0a0a18; border: 1px solid #1e2e3e; "
+                "border-radius: 3px; color: #c8d8e8; font-size: 10px; padding: 1px 2px; }"
+                "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; }");
+            offRow->addWidget(m_fmOffsetSpin, 1);
+            fvb->addLayout(offRow);
+
+            connect(m_fmOffsetSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+                    this, [this](double val) {
+                if (m_fmOffsetSpin->signalsBlocked()) return;
+                if (!m_slice) return;
+                m_slice->setFmRepeaterOffsetFreq(val);
+                const QString& dir = m_slice->repeaterOffsetDir();
+                if (dir == "up") m_slice->setTxOffsetFreq(val);
+                else if (dir == "down") m_slice->setTxOffsetFreq(-val);
+                else m_slice->setTxOffsetFreq(0);
+            });
+
+            // Direction: − | Simplex | + | REV
+            auto* dirRow = new QHBoxLayout;
+            dirRow->setSpacing(2);
+
+            auto applyDir = [this](const QString& dir) {
+                if (!m_slice) return;
+                m_slice->setRepeaterOffsetDir(dir);
+                double offset = m_slice->fmRepeaterOffsetFreq();
+                if (dir == "up") m_slice->setTxOffsetFreq(offset);
+                else if (dir == "down") m_slice->setTxOffsetFreq(-offset);
+                else m_slice->setTxOffsetFreq(0);
+                m_fmOffsetDown->setChecked(dir == "down");
+                m_fmSimplexBtn->setChecked(dir == "simplex");
+                m_fmOffsetUp->setChecked(dir == "up");
+            };
+
+            m_fmOffsetDown = new QPushButton(QString::fromUtf8("\xe2\x88\x92"));
+            m_fmOffsetDown->setCheckable(true);
+            m_fmOffsetDown->setStyleSheet(kDirBtn);
+            connect(m_fmOffsetDown, &QPushButton::clicked, this, [applyDir] { applyDir("down"); });
+            dirRow->addWidget(m_fmOffsetDown);
+
+            m_fmSimplexBtn = new QPushButton("Simplex");
+            m_fmSimplexBtn->setCheckable(true);
+            m_fmSimplexBtn->setChecked(true);
+            m_fmSimplexBtn->setStyleSheet(kDirBtn);
+            connect(m_fmSimplexBtn, &QPushButton::clicked, this, [applyDir] { applyDir("simplex"); });
+            dirRow->addWidget(m_fmSimplexBtn);
+
+            m_fmOffsetUp = new QPushButton("+");
+            m_fmOffsetUp->setCheckable(true);
+            m_fmOffsetUp->setStyleSheet(kDirBtn);
+            connect(m_fmOffsetUp, &QPushButton::clicked, this, [applyDir] { applyDir("up"); });
+            dirRow->addWidget(m_fmOffsetUp);
+
+            m_fmRevBtn = new QPushButton("REV");
+            m_fmRevBtn->setCheckable(true);
+            m_fmRevBtn->setStyleSheet(kRevBtn);
+            connect(m_fmRevBtn, &QPushButton::toggled, this, [this](bool on) {
+                if (m_fmRevBtn->signalsBlocked() || !m_slice) return;
+                double offset = m_slice->fmRepeaterOffsetFreq();
+                const QString& dir = m_slice->repeaterOffsetDir();
+                if (dir == "up") m_slice->setTxOffsetFreq(on ? -offset : offset);
+                else if (dir == "down") m_slice->setTxOffsetFreq(on ? offset : -offset);
+            });
+            dirRow->addWidget(m_fmRevBtn);
+
+            fvb->addLayout(dirRow);
+
+            m_fmContainer->hide();
+            dspVb->addWidget(m_fmContainer);
+        }
 
         connect(m_nrBtn,   &QPushButton::toggled, this, [this](bool on) { if (!m_updatingFromModel && m_slice) m_slice->setNr(on); });
         connect(m_nbBtn,   &QPushButton::toggled, this, [this](bool on) { if (!m_updatingFromModel && m_slice) m_slice->setNb(on); });
@@ -466,6 +784,7 @@ void VfoWidget::buildTabContent()
         connect(m_nrfBtn,  &QPushButton::toggled, this, [this](bool on) { if (!m_updatingFromModel && m_slice) m_slice->setNrf(on); });
         connect(m_anflBtn, &QPushButton::toggled, this, [this](bool on) { if (!m_updatingFromModel && m_slice) m_slice->setAnfl(on); });
         connect(m_anftBtn, &QPushButton::toggled, this, [this](bool on) { if (!m_updatingFromModel && m_slice) m_slice->setAnft(on); });
+        connect(m_apfBtn,  &QPushButton::toggled, this, [this](bool on) { if (!m_updatingFromModel && m_slice) m_slice->setApf(on); });
 
         m_tabStack->addWidget(dspTab);
     }
@@ -854,6 +1173,36 @@ void VfoWidget::setSlice(SliceModel* slice)
     connect(m_slice, &SliceModel::modeChanged, this, [this](const QString& mode) {
         m_tabBtns[2]->setText(mode);  // update mode tab label
         updateModeTab();
+        // Show/hide mode-specific DSP controls
+        bool isRtty = (mode == "RTTY");
+        bool isCw = (mode == "CW" || mode == "CWL");
+        bool isDig = (mode == "DIGL" || mode == "DIGU");
+        bool isFm = (mode == "FM" || mode == "NFM");
+        // Swap DSP tab label to OPT for FM modes
+        m_tabBtns[1]->setText(isFm ? "OPT" : "DSP");
+        m_rttyContainer->setVisible(isRtty);
+        m_apfContainer->setVisible(isCw);
+        m_digContainer->setVisible(isDig);
+        m_fmContainer->setVisible(isFm);
+        if (isDig) {
+            int off = (mode == "DIGL") ? m_slice->diglOffset() : m_slice->diguOffset();
+            m_digOffsetLabel->setText(QString::number(off));
+        }
+        // CW: show APF, hide ANF/RNN/ANFL/ANFT
+        // RTTY/DIG: hide ANF/ANFL/ANFT
+        m_apfBtn->setVisible(isCw);
+        m_anfBtn->setVisible(!isRtty && !isCw && !isDig && !isFm);
+        m_rnnBtn->setVisible(!isCw && !isFm);
+        m_anflBtn->setVisible(!isRtty && !isCw && !isDig && !isFm);
+        m_anftBtn->setVisible(!isRtty && !isCw && !isDig && !isFm);
+        // Hide all DSP buttons in FM mode
+        m_nrBtn->setVisible(!isFm);
+        m_nbBtn->setVisible(!isFm);
+        m_nrlBtn->setVisible(!isFm);
+        m_nrsBtn->setVisible(!isFm);
+        m_nrfBtn->setVisible(!isFm);
+        relayoutDspGrid();
+        if (m_tabStack->isVisible()) adjustSize();
     });
     // Filter
     connect(m_slice, &SliceModel::filterChanged, this, [this](int, int) {
@@ -904,6 +1253,14 @@ void VfoWidget::setSlice(SliceModel* slice)
     connectDsp(&SliceModel::nrfChanged, m_nrfBtn);
     connectDsp(&SliceModel::anflChanged, m_anflBtn);
     connectDsp(&SliceModel::anftChanged, m_anftBtn);
+    connectDsp(&SliceModel::apfChanged, m_apfBtn);
+    connect(m_slice, &SliceModel::apfLevelChanged, this, [this](int v) {
+        m_updatingFromModel = true;
+        QSignalBlocker sb(m_apfSlider);
+        m_apfSlider->setValue(v);
+        m_apfValueLbl->setText(QString::number(v));
+        m_updatingFromModel = false;
+    });
     // Squelch
     connect(m_slice, &SliceModel::squelchChanged, this, [this](bool on, int level) {
         m_updatingFromModel = true;
@@ -943,6 +1300,52 @@ void VfoWidget::setSlice(SliceModel* slice)
         m_xitBtn->setChecked(on);
         m_xitLabel->setText(QString("%1%2 Hz").arg(hz >= 0 ? "+" : "").arg(hz));
         m_updatingFromModel = false;
+    });
+    // FM controls
+    connect(m_slice, &SliceModel::fmToneModeChanged, this, [this](const QString& mode) {
+        m_updatingFromModel = true;
+        QSignalBlocker sb(m_fmToneModeCmb);
+        int idx = m_fmToneModeCmb->findData(mode);
+        if (idx >= 0) m_fmToneModeCmb->setCurrentIndex(idx);
+        m_fmToneValueCmb->setEnabled(mode == "ctcss_tx");
+        m_updatingFromModel = false;
+    });
+    connect(m_slice, &SliceModel::fmToneValueChanged, this, [this](const QString& val) {
+        m_updatingFromModel = true;
+        QSignalBlocker sb(m_fmToneValueCmb);
+        int idx = m_fmToneValueCmb->findData(val);
+        if (idx >= 0) m_fmToneValueCmb->setCurrentIndex(idx);
+        m_updatingFromModel = false;
+    });
+    connect(m_slice, &SliceModel::repeaterOffsetDirChanged, this, [this](const QString& dir) {
+        m_updatingFromModel = true;
+        QSignalBlocker b1(m_fmOffsetDown), b2(m_fmSimplexBtn), b3(m_fmOffsetUp);
+        m_fmOffsetDown->setChecked(dir == "down");
+        m_fmSimplexBtn->setChecked(dir == "simplex");
+        m_fmOffsetUp->setChecked(dir == "up");
+        m_updatingFromModel = false;
+    });
+    connect(m_slice, &SliceModel::fmRepeaterOffsetFreqChanged, this, [this](double mhz) {
+        m_updatingFromModel = true;
+        QSignalBlocker sb(m_fmOffsetSpin);
+        m_fmOffsetSpin->setValue(mhz);
+        m_updatingFromModel = false;
+    });
+    // DIG offset
+    connect(m_slice, &SliceModel::diglOffsetChanged, this, [this](int hz) {
+        if (m_slice && m_slice->mode() == "DIGL")
+            m_digOffsetLabel->setText(QString::number(hz));
+    });
+    connect(m_slice, &SliceModel::diguOffsetChanged, this, [this](int hz) {
+        if (m_slice && m_slice->mode() == "DIGU")
+            m_digOffsetLabel->setText(QString::number(hz));
+    });
+    // RTTY Mark/Shift
+    connect(m_slice, &SliceModel::rttyMarkChanged, this, [this](int hz) {
+        m_markLabel->setText(QString::number(hz));
+    });
+    connect(m_slice, &SliceModel::rttyShiftChanged, this, [this](int hz) {
+        m_shiftLabel->setText(QString::number(hz));
     });
     // DAX
     connect(m_slice, &SliceModel::daxChannelChanged, this, [this](int ch) {
@@ -1014,6 +1417,7 @@ void VfoWidget::syncFromSlice()
     syncDsp(m_nrfBtn, m_slice->nrfOn());
     syncDsp(m_anflBtn, m_slice->anflOn());
     syncDsp(m_anftBtn, m_slice->anftOn());
+    syncDsp(m_apfBtn, m_slice->apfOn());
 
     // RIT/XIT
     {
@@ -1023,6 +1427,55 @@ void VfoWidget::syncFromSlice()
     }
     m_ritLabel->setText(QString("%1%2 Hz").arg(m_slice->ritFreq() >= 0 ? "+" : "").arg(m_slice->ritFreq()));
     m_xitLabel->setText(QString("%1%2 Hz").arg(m_slice->xitFreq() >= 0 ? "+" : "").arg(m_slice->xitFreq()));
+
+    // RTTY
+    bool isRtty = (m_slice->mode() == "RTTY");
+    m_markLabel->setText(QString::number(m_slice->rttyMark()));
+    m_shiftLabel->setText(QString::number(m_slice->rttyShift()));
+    m_rttyContainer->setVisible(isRtty);
+    bool isCw = (m_slice->mode() == "CW" || m_slice->mode() == "CWL");
+    bool isDig = (m_slice->mode() == "DIGL" || m_slice->mode() == "DIGU");
+    bool isFm = (m_slice->mode() == "FM" || m_slice->mode() == "NFM");
+    m_tabBtns[1]->setText(isFm ? "OPT" : "DSP");
+    m_apfBtn->setVisible(isCw);
+    m_anfBtn->setVisible(!isRtty && !isCw && !isDig && !isFm);
+    m_rnnBtn->setVisible(!isCw && !isFm);
+    m_anflBtn->setVisible(!isRtty && !isCw && !isDig && !isFm);
+    m_anftBtn->setVisible(!isRtty && !isCw && !isDig && !isFm);
+    m_nrBtn->setVisible(!isFm);
+    m_nbBtn->setVisible(!isFm);
+    m_nrlBtn->setVisible(!isFm);
+    m_nrsBtn->setVisible(!isFm);
+    m_nrfBtn->setVisible(!isFm);
+    m_apfContainer->setVisible(isCw);
+    m_digContainer->setVisible(isDig);
+    m_fmContainer->setVisible(isFm);
+    if (isFm) {
+        QSignalBlocker b1(m_fmToneModeCmb), b2(m_fmToneValueCmb), b3(m_fmOffsetSpin);
+        int tmIdx = m_fmToneModeCmb->findData(m_slice->fmToneMode());
+        if (tmIdx >= 0) m_fmToneModeCmb->setCurrentIndex(tmIdx);
+        m_fmToneValueCmb->setEnabled(m_slice->fmToneMode() == "ctcss_tx");
+        int tvIdx = m_fmToneValueCmb->findData(m_slice->fmToneValue());
+        if (tvIdx >= 0) m_fmToneValueCmb->setCurrentIndex(tvIdx);
+        m_fmOffsetSpin->setValue(m_slice->fmRepeaterOffsetFreq());
+        QSignalBlocker b4(m_fmOffsetDown), b5(m_fmSimplexBtn), b6(m_fmOffsetUp);
+        const QString& dir = m_slice->repeaterOffsetDir();
+        m_fmOffsetDown->setChecked(dir == "down");
+        m_fmSimplexBtn->setChecked(dir == "simplex");
+        m_fmOffsetUp->setChecked(dir == "up");
+    }
+    if (isDig) {
+        int off = (m_slice->mode() == "DIGL") ? m_slice->diglOffset() : m_slice->diguOffset();
+        m_digOffsetLabel->setText(QString::number(off));
+    }
+    relayoutDspGrid();
+
+    // APF level
+    {
+        QSignalBlocker sb(m_apfSlider);
+        m_apfSlider->setValue(m_slice->apfLevel());
+        m_apfValueLbl->setText(QString::number(m_slice->apfLevel()));
+    }
 
     // DAX
     {
@@ -1054,6 +1507,24 @@ void VfoWidget::updateFilterLabel()
         m_filterWidthLbl->setText(QString("%1K").arg(w / 1000.0, 0, 'f', 1));
     else
         m_filterWidthLbl->setText(QString::number(w));
+}
+
+void VfoWidget::relayoutDspGrid()
+{
+    // Remove all widgets from the grid (without deleting them)
+    QPushButton* all[] = {m_nrBtn, m_nbBtn, m_anfBtn, m_apfBtn, m_nrlBtn,
+                          m_nrsBtn, m_rnnBtn, m_nrfBtn, m_anflBtn, m_anftBtn};
+    for (auto* btn : all)
+        m_dspGrid->removeWidget(btn);
+
+    // Re-add only non-hidden buttons in 4-column rows
+    int col = 0, row = 0;
+    for (auto* btn : all) {
+        if (!btn->isHidden()) {
+            m_dspGrid->addWidget(btn, row, col);
+            if (++col >= 4) { col = 0; ++row; }
+        }
+    }
 }
 
 // ── Mode tab helpers ──────────────────────────────────────────────────────────

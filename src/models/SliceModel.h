@@ -48,6 +48,8 @@ public:
     bool    nrfOn()       const { return m_nrf; }
     bool    anflOn()      const { return m_anfl; }
     bool    anftOn()      const { return m_anft; }
+    bool    apfOn()       const { return m_apf; }
+    int     apfLevel()    const { return m_apfLevel; }
     int     nbLevel()     const { return m_nbLevel; }
     int     nrLevel()     const { return m_nrLevel; }
     int     anfLevel()    const { return m_anfLevel; }
@@ -65,6 +67,10 @@ public:
     bool    xitOn()       const { return m_xitOn; }
     int     xitFreq()     const { return m_xitFreq; }
     int     daxChannel()  const { return m_daxChannel; }
+    int     rttyMark()    const { return m_rttyMark; }
+    int     rttyShift()   const { return m_rttyShift; }
+    int     diglOffset()  const { return m_diglOffset; }
+    int     diguOffset()  const { return m_diguOffset; }
 
     // Getters — FM duplex/repeater
     QString fmToneMode()          const { return m_fmToneMode; }
@@ -95,6 +101,8 @@ public:
     void setNrf(bool on);
     void setAnfl(bool on);
     void setAnft(bool on);
+    void setApf(bool on);
+    void setApfLevel(int v);
     void setNbLevel(int v);
     void setNrLevel(int v);
     void setAnfLevel(int v);
@@ -108,6 +116,10 @@ public:
     void setRit(bool on, int hz);
     void setXit(bool on, int hz);
     void setDaxChannel(int ch);
+    void setRttyMark(int hz);
+    void setRttyShift(int hz);
+    void setDiglOffset(int hz);
+    void setDiguOffset(int hz);
     void setTxSlice(bool on);
 
     // Setters — FM duplex/repeater
@@ -145,6 +157,8 @@ signals:
     void nrfChanged(bool on);
     void anflChanged(bool on);
     void anftChanged(bool on);
+    void apfChanged(bool on);
+    void apfLevelChanged(int v);
     void nbLevelChanged(int v);
     void nrLevelChanged(int v);
     void anfLevelChanged(int v);
@@ -160,6 +174,10 @@ signals:
     void ritChanged(bool on, int hz);
     void xitChanged(bool on, int hz);
     void daxChannelChanged(int ch);
+    void rttyMarkChanged(int hz);
+    void rttyShiftChanged(int hz);
+    void diglOffsetChanged(int hz);
+    void diguOffsetChanged(int hz);
 
     // FM duplex/repeater signals
     void fmToneModeChanged(const QString& mode);
@@ -198,6 +216,8 @@ private:
     bool    m_nrf{false};
     bool    m_anfl{false};
     bool    m_anft{false};
+    bool    m_apf{false};
+    int     m_apfLevel{50};
     int     m_nbLevel{50};
     int     m_nrLevel{50};
     int     m_anfLevel{50};
@@ -214,6 +234,10 @@ private:
     bool    m_xitOn{false};
     int     m_xitFreq{0};
     int     m_daxChannel{0};
+    int     m_rttyMark{2125};
+    int     m_rttyShift{170};
+    int     m_diglOffset{2210};
+    int     m_diguOffset{1500};
 
     // FM duplex/repeater state
     QString m_fmToneMode{"off"};

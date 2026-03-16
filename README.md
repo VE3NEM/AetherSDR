@@ -15,7 +15,7 @@ AetherSDR is free and open-source software licensed under the GNU General Public
 A Linux-native SmartSDR-compatible client for FlexRadio Systems transceivers,
 built with **Qt6** and **C++20**.
 
-Current version: **0.1.10**
+Current version: **0.2.0**
 
 ![AetherSDR Screenshot](docs/screenshot-v2.png)
 
