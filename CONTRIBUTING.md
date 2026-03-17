@@ -308,7 +308,7 @@ Copy and paste this into Claude.ai:
 
 ```
 I want to request a feature for AetherSDR, a Linux-native Qt6/C++20 client
-for FlexRadio transceivers. It uses the SmartSDR protocol over TCP/UDP.
+for FlexRadio transceivers. It uses the FlexLib API over TCP/UDP.
 
 Before writing the feature request, please check the existing open issues at:
 https://github.com/ten9876/AetherSDR/issues
@@ -326,7 +326,7 @@ Include:
    Windows, describe how it works there (screenshots welcome)
 5. A "Suggested Behavior" section with specific details about how it should
    work in AetherSDR (what the user clicks, what they see, what happens)
-6. A "Protocol Hints" section — if you know the SmartSDR commands involved,
+6. A "Protocol Hints" section — if you know the FlexLib API calls involved,
    list them. If not, just say "Unknown — needs research"
 
 Here is my feature idea:
