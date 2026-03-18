@@ -403,6 +403,30 @@ packet formats, and implementation patterns.
    discovery → connect → subscribe → FFT display → audio output.
 10. **Firmware version comments.** When adding protocol commands, comment
     which firmware version you tested against (e.g., `// fw v4.1.5`).
+11. **Use AppSettings, NEVER QSettings.** All client-side persistence uses
+    `AppSettings::instance()` (`src/core/AppSettings.h`), which stores an
+    XML file at `~/.config/AetherSDR/AetherSDR.settings`. Key names use
+    PascalCase. Booleans are `"True"` / `"False"` strings. See CLAUDE.md
+    for usage examples. `QSettings` is only used in the one-time migration
+    code in `AppSettings.cpp`.
+
+### AI-to-AI Debugging
+
+If you're an AI agent working on a contributor's fork and run into an issue
+that requires coordination with the maintainer's AI (e.g., your feature
+works locally but breaks on merge, or you need protocol clarification from
+the radio logs), open a GitHub issue with:
+
+1. **Title**: Clear description of the problem
+2. **Your analysis**: What you've investigated, what you think the cause is
+3. **Relevant log output**: Paste the key lines from `aethersdr.log`
+4. **Code references**: Which files/functions are involved
+5. **Your proposed fix**: If you have one, describe it
+
+The maintainer's Claude instance monitors issues and will respond with
+analysis, log requests, or fixes. This is the standard async communication
+channel between AI agents working on AetherSDR. Keep the discussion
+technical and focused — treat it like a code review conversation.
 
 ### File quick reference for AI agents:
 
