@@ -1124,13 +1124,33 @@ void VfoWidget::showTab(int index)
 void VfoWidget::updatePosition(int vfoX, int specTop)
 {
     const int w = width();
-    int x = vfoX - w;  // default: left of VFO marker
     bool onLeft = true;
 
-    // Flip to right side if widget would be clipped on the left
-    if (x < 0) {
-        x = vfoX;
+    // For lower-sideband modes (LSB, DIGL, CWL), default to right side
+    // so the widget doesn't obscure the passband
+    bool lowerSideband = false;
+    if (m_slice) {
+        const QString mode = m_slice->mode();
+        lowerSideband = (mode == "LSB" || mode == "DIGL" || mode == "CWL");
+    }
+
+    int x;
+    if (lowerSideband) {
+        x = vfoX;           // right of VFO marker
         onLeft = false;
+        // Flip to left if would clip off right edge
+        if (parentWidget() && x + w > parentWidget()->width()) {
+            x = vfoX - w;
+            onLeft = true;
+        }
+    } else {
+        x = vfoX - w;       // left of VFO marker
+        onLeft = true;
+        // Flip to right if would clip off left edge
+        if (x < 0) {
+            x = vfoX;
+            onLeft = false;
+        }
     }
 
     move(x, specTop);
