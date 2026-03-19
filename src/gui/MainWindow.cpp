@@ -1443,7 +1443,10 @@ void MainWindow::activateRADE()
     double freqMhz = s->frequency();
     QString mode = (freqMhz < 10.0) ? "DIGL" : "DIGU";
     s->setMode(mode);
-    s->setFilterWidth(0, 3500);
+    if (mode == "DIGL")
+        s->setFilterWidth(-3500, 0);
+    else
+        s->setFilterWidth(0, 3500);
 
     // Create and start RADE engine
     if (!m_radeEngine) {
