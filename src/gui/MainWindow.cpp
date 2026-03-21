@@ -1180,13 +1180,13 @@ void MainWindow::buildUI()
     statusBar()->setStyleSheet(
         "QStatusBar { background: #0a0a14; border-top: 1px solid #203040; }"
         "QStatusBar::item { border: none; }"
-        "QLabel { font-size: 14px; background: transparent; }");
+        "QLabel { font-size: 21px; background: transparent; }");
 
-    const QString valStyle  = "QLabel { color: #8aa8c0; font-size: 14px; }";
-    const QString sepStyle  = "QLabel { color: #304050; font-size: 14px; }";
-    const QString greyInd   = "QLabel { color: #404858; font-weight: bold; font-size: 14px; }";
-    const QString greenInd  = "QLabel { color: #00e060; font-weight: bold; font-size: 14px; }";
-    const QString redInd    = "QLabel { color: #e04040; font-weight: bold; font-size: 14px; }";
+    const QString valStyle  = "QLabel { color: #8aa8c0; font-size: 21px; }";
+    const QString sepStyle  = "QLabel { color: #304050; font-size: 21px; }";
+    const QString greyInd   = "QLabel { color: #404858; font-weight: bold; font-size: 21px; }";
+    const QString greenInd  = "QLabel { color: #00e060; font-weight: bold; font-size: 21px; }";
+    const QString redInd    = "QLabel { color: #e04040; font-weight: bold; font-size: 21px; }";
 
     auto addSep = [&]() {
         auto* sep = new QLabel(" · ", this);
