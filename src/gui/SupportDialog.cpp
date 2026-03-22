@@ -18,6 +18,8 @@
 #include <QScrollBar>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QClipboard>
+#include <QApplication>
 #include <QVBoxLayout>
 
 namespace AetherSDR {
@@ -121,7 +123,7 @@ void SupportDialog::buildUI()
     sendBtn->setFixedHeight(26);
     sendBtn->setStyleSheet("QPushButton { background: #00607a; color: #e0f0ff; font-weight: bold; }");
     connect(sendBtn, &QPushButton::clicked, this, [this]() {
-        // Create support bundle (tar.gz with logs, settings, system info)
+        // Create support bundle
         SupportBundle::RadioInfo radio;
         if (m_radioModel && m_radioModel->isConnected()) {
             radio.model = m_radioModel->model();
@@ -138,7 +140,7 @@ void SupportDialog::buildUI()
             return;
         }
 
-        // Collect system info for the issue body
+        // Collect system info
         QString version = QCoreApplication::applicationVersion();
         QString qt = qVersion();
         QString os;
@@ -149,35 +151,105 @@ void SupportDialog::buildUI()
 #else
         os = "Linux";
 #endif
-        QString body = QString(
-            "### What happened?\n\n"
-            "_Describe the issue here_\n\n"
-            "### Steps to reproduce\n\n"
-            "1. \n2. \n3. \n\n"
-            "### System Info\n\n"
-            "- AetherSDR: %1\n"
-            "- Qt: %2\n"
+        QString radioInfo = (m_radioModel && m_radioModel->isConnected())
+            ? QString("%1 fw %2").arg(m_radioModel->model(), m_radioModel->version())
+            : "not connected";
+
+        // Diagnostic prompt for AI
+        static const QString kPromptTemplate =
+            "I'm experiencing an issue with AetherSDR, a Linux/macOS/Windows SDR client\n"
+            "for FlexRadio transceivers (https://github.com/ten9876/AetherSDR).\n\n"
+            "My system:\n"
+            "- AetherSDR version: %1\n"
+            "- Qt version: %2\n"
             "- OS: %3\n"
-            "- Build: %4\n\n"
-            "### Support Bundle\n\n"
-            "**Please drag and drop the support bundle into this issue.**\n")
-            .arg(version, qt, os, QStringLiteral(__DATE__));
+            "- Radio: %4\n\n"
+            "Please help me write a clear bug report for the developers. Ask me questions\n"
+            "about what happened, what I expected, and help me describe the steps to\n"
+            "reproduce the issue. Then format the output as a GitHub issue with:\n\n"
+            "1. A clear, concise title\n"
+            "2. A \"What happened?\" section describing the problem\n"
+            "3. A \"What did you expect?\" section\n"
+            "4. A \"Steps to reproduce\" section with numbered steps\n"
+            "5. A \"System Info\" section (pre-filled above)\n"
+            "6. Any relevant observations about when it happens, how often, and what\n"
+            "   makes it better or worse\n\n"
+            "Here is my issue:\n\n"
+            "[Describe what went wrong in plain English — for example: \"The waterfall\n"
+            "freezes after about 10 minutes\" or \"Clicking the TX button does nothing\"\n"
+            "or \"The audio cuts out when I switch bands\"]";
 
-        QUrl url("https://github.com/ten9876/AetherSDR/issues/new");
-        QUrlQuery query;
-        query.addQueryItem("body", body);
-        query.addQueryItem("labels", "bug");
-        url.setQuery(query);
-        QDesktopServices::openUrl(url);
+        QString prompt = kPromptTemplate.arg(version, qt, os, radioInfo);
+        QApplication::clipboard()->setText(prompt);
 
-        // Open the folder containing the bundle
-        QFileInfo fi(bundlePath);
-        QDesktopServices::openUrl(QUrl::fromLocalFile(fi.absolutePath()));
+        QMessageBox dlg(this);
+        dlg.setWindowTitle("AI-Assisted Bug Report");
+        dlg.setIcon(QMessageBox::Information);
+        dlg.setText(
+            "<h3>Get Help Describing Your Issue</h3>"
+            "<p>Use any AI assistant to help you write a clear bug report. "
+            "A diagnostic prompt with your system info has been copied to your clipboard.</p>"
+            "<ol>"
+            "<li><b>Choose your AI</b> — click one of the buttons below</li>"
+            "<li><b>Paste the prompt</b> — your system info is pre-filled</li>"
+            "<li><b>Describe what happened</b> — the AI will help you structure it</li>"
+            "<li><b>Copy the AI's output</b> and click <b>Submit Bug Report</b></li>"
+            "<li><b>Drag your support bundle</b> into the GitHub issue form</li>"
+            "</ol>"
+            "<p style='color:#8aa8c0; font-size:11px;'>"
+            "Your support bundle (logs + settings) is ready to attach.</p>");
 
-        QMessageBox::information(this, "File an Issue",
-            QString("Your browser and file explorer have been opened.\n\n"
-                    "Drag and drop the support bundle into the GitHub issue:\n%1")
-                .arg(fi.fileName()));
+        auto* claudeBtn   = dlg.addButton("Claude", QMessageBox::ActionRole);
+        auto* chatgptBtn  = dlg.addButton("ChatGPT", QMessageBox::ActionRole);
+        auto* geminiBtn   = dlg.addButton("Gemini", QMessageBox::ActionRole);
+        auto* grokBtn     = dlg.addButton("Grok", QMessageBox::ActionRole);
+        auto* perplexBtn  = dlg.addButton("Perplexity", QMessageBox::ActionRole);
+        auto* issueBtn    = dlg.addButton("Submit Bug Report", QMessageBox::ActionRole);
+        dlg.addButton(QMessageBox::Close);
+
+        dlg.exec();
+
+        auto* clicked = dlg.clickedButton();
+        bool openedLLM = false;
+        if (clicked == claudeBtn) {
+            QDesktopServices::openUrl(QUrl("https://claude.ai/new"));
+            openedLLM = true;
+        } else if (clicked == chatgptBtn) {
+            QDesktopServices::openUrl(QUrl("https://chat.openai.com/"));
+            openedLLM = true;
+        } else if (clicked == geminiBtn) {
+            QDesktopServices::openUrl(QUrl("https://gemini.google.com/"));
+            openedLLM = true;
+        } else if (clicked == grokBtn) {
+            QDesktopServices::openUrl(QUrl("https://grok.x.ai/"));
+            openedLLM = true;
+        } else if (clicked == perplexBtn) {
+            QDesktopServices::openUrl(QUrl("https://www.perplexity.ai/"));
+            openedLLM = true;
+        } else if (clicked == issueBtn) {
+            QUrl url("https://github.com/ten9876/AetherSDR/issues/new");
+            QUrlQuery query;
+            query.addQueryItem("labels", "bug");
+            url.setQuery(query);
+            QDesktopServices::openUrl(url);
+
+            // Open support bundle folder for drag-and-drop
+            QFileInfo fi(bundlePath);
+            QDesktopServices::openUrl(QUrl::fromLocalFile(fi.absolutePath()));
+
+            QMessageBox::information(this, "Submit Bug Report",
+                QString("Your browser and support folder have been opened.\n\n"
+                        "1. Paste the AI's bug report into the GitHub form\n"
+                        "2. Drag and drop the support bundle: %1")
+                    .arg(fi.fileName()));
+        }
+
+        if (openedLLM) {
+            QMessageBox::information(this, "Prompt Copied",
+                "The diagnostic prompt has been copied to your clipboard.\n\n"
+                "Paste it into the AI, describe your issue, then come back\n"
+                "and click \"Submit Bug Report\" to file it on GitHub.");
+        }
     });
     actionRow->addWidget(refreshBtn);
     actionRow->addWidget(clearBtn);
