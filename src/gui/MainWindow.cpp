@@ -1606,6 +1606,8 @@ void MainWindow::onSliceAdded(SliceModel* s)
             s->setFrequency(rxSlice->frequency());
         spectrum()->setSplitPair(m_splitRxSliceId, m_splitTxSliceId);
         updateSplitState();
+        // Auto-focus the TX VFO so the user can immediately tune the TX offset
+        setActiveSlice(s->sliceId());
     }
 }
 
