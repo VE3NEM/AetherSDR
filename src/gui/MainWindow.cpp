@@ -780,7 +780,21 @@ MainWindow::MainWindow(QWidget* parent)
     }
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+#ifdef HAVE_RADE
+    if (m_radeSliceId >= 0)
+        deactivateRADE();
+#endif
+    // Stop audio processing before members are destroyed.
+    // PanadapterStream may still deliver packets on its UDP thread —
+    // stopping the stream and disconnecting signals prevents
+    // use-after-free in NR2/RN2 during destruction.
+    m_audio.setNr2Enabled(false);
+    m_audio.setRn2Enabled(false);
+    m_audio.stopRxStream();
+    m_audio.stopTxStream();
+}
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
