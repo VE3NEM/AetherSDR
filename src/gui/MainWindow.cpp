@@ -2663,7 +2663,6 @@ void MainWindow::applyPanLayout(const QString& layoutId)
     qDebug() << "applyPanLayout: have" << existing << "pans, creating"
              << toCreate << "more for layout" << layoutId;
 
-    m_applyingLayout = true;
     createPansSequentially(layoutId, toCreate, panIds, 0);
 }
 
@@ -2674,38 +2673,18 @@ void MainWindow::createPansSequentially(const QString& layoutId, int total,
         // All new pans created — wait for radio status to establish PanadapterModels
         qDebug() << "applyPanLayout: all" << total << "new pans created:" << *panIds;
         QTimer::singleShot(800, this, [this, panIds, layoutId]() {
-            m_applyingLayout = false;
-
-            // Add applets for new pans that were suppressed during creation
-            for (const auto& pid : *panIds) {
-                if (!m_panStack->panadapter(pid) && pid != "default") {
-                    auto* applet = m_panStack->addPanadapter(pid);
-                    wirePanadapter(applet);
-                    auto* pan = m_radioModel.panadapter(pid);
-                    if (pan) {
-                        connect(pan, &PanadapterModel::infoChanged,
-                                applet->spectrumWidget(), &SpectrumWidget::setFrequencyRange);
-                        connect(pan, &PanadapterModel::levelChanged,
-                                applet->spectrumWidget(), &SpectrumWidget::setDbmRange);
-                        applet->spectrumWidget()->setDbmRange(pan->minDbm(), pan->maxDbm());
-                        applet->spectrumWidget()->setFrequencyRange(
-                            pan->centerMhz(), pan->bandwidthMhz());
-                        // Push dimensions
-                        int xpix = applet->spectrumWidget()->width();
-                        int ypix = applet->spectrumWidget()->height();
-                        if (xpix < 100) xpix = 1024;
-                        if (ypix < 100) ypix = 700;
-                        m_radioModel.sendCommand(
-                            QString("display pan set %1 xpixels=%2 ypixels=%3")
-                                .arg(pid).arg(xpix).arg(ypix));
-                    }
-                    qDebug() << "applyPanLayout: added applet for" << pid;
+            // The new pans were added to the stack via panadapterAdded handler.
+            // Wire any that aren't already wired.
+            for (auto* applet : m_panStack->allApplets()) {
+                const QString pid = applet->panId();
+                auto* pan = m_radioModel.panadapter(pid);
+                if (pan) {
+                    // Push current state to the spectrum widget
+                    applet->spectrumWidget()->setDbmRange(pan->minDbm(), pan->maxDbm());
+                    applet->spectrumWidget()->setFrequencyRange(
+                        pan->centerMhz(), pan->bandwidthMhz());
                 }
             }
-
-            // Re-process existing slices for new pans
-            for (auto* s : m_radioModel.slices())
-                onSliceAdded(s);
 
             // Rearrange splitter structure for the selected layout
             m_panStack->rearrangeLayout(layoutId);
