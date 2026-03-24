@@ -2217,17 +2217,29 @@ void MainWindow::wirePanadapter(PanadapterApplet* applet)
     connect(applet, &PanadapterApplet::activated,
             m_panStack, &PanadapterStack::setActivePan);
 
-    // ── User drag actions from spectrum → RadioModel ──────────────────────
+    // ── User drag actions from spectrum → radio (per-pan) ──────────────────
     connect(sw, &SpectrumWidget::bandwidthChangeRequested,
-            &m_radioModel, &RadioModel::setPanBandwidth);
+            this, [this, applet](double bw) {
+        m_radioModel.sendCommand(
+            QString("display pan set %1 bandwidth=%2").arg(applet->panId()).arg(bw, 0, 'f', 6));
+    });
     connect(sw, &SpectrumWidget::centerChangeRequested,
-            &m_radioModel, &RadioModel::setPanCenter);
+            this, [this, applet](double center) {
+        m_radioModel.sendCommand(
+            QString("display pan set %1 center=%2").arg(applet->panId()).arg(center, 0, 'f', 6));
+    });
     connect(sw, &SpectrumWidget::filterChangeRequested,
             this, [this](int lo, int hi) {
         if (auto* s = activeSlice()) s->setFilterWidth(lo, hi);
     });
     connect(sw, &SpectrumWidget::dbmRangeChangeRequested,
-            &m_radioModel, &RadioModel::setPanDbmRange);
+            this, [this, applet](float minDbm, float maxDbm) {
+        m_radioModel.sendCommand(
+            QString("display pan set %1 min_dbm=%2 max_dbm=%3")
+                .arg(applet->panId())
+                .arg(static_cast<double>(minDbm), 0, 'f', 2)
+                .arg(static_cast<double>(maxDbm), 0, 'f', 2));
+    });
 
     // ── TNF signals ──────────────────────────────────────────────────────
     auto* tnf = m_radioModel.tnfModel();
