@@ -369,6 +369,7 @@ private:
     QVector<TnfMarker> m_tnfMarkers;
     bool m_tnfGlobalEnabled{true};
     QVector<SpotMarker> m_spotMarkers;
+    QVector<QPair<QRect, double>> m_spotClickRects;  // rect → freqMhz for click-to-tune
     bool m_showSpots{true};
     int  m_spotFontSize{16};
     int  m_spotMaxLevels{3};

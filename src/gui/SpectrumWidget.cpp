@@ -532,6 +532,18 @@ void SpectrumWidget::mousePressEvent(QMouseEvent* ev)
     const int specH = static_cast<int>(contentH * m_spectrumFrac);
     const int y = static_cast<int>(ev->position().y());
 
+    // Click on a spot label → tune to that frequency
+    if (m_showSpots && ev->button() == Qt::LeftButton) {
+        const QPoint pos(static_cast<int>(ev->position().x()), y);
+        for (const auto& [rect, freq] : m_spotClickRects) {
+            if (rect.contains(pos)) {
+                emit frequencyClicked(freq);
+                ev->accept();
+                return;
+            }
+        }
+    }
+
     // Click on the divider bar → start split drag
     if (y >= specH && y < specH + DIVIDER_H) {
         m_draggingDivider = true;
@@ -1591,8 +1603,9 @@ void SpectrumWidget::drawSpotMarkers(QPainter& p, const QRect& specRect)
     const int th = fm.height() + 2;
     const int maxBottom = startY + th * m_spotMaxLevels;
 
-    // Track label positions to avoid overlap
+    // Track label positions to avoid overlap and for click detection
     QVector<QRect> placed;
+    m_spotClickRects.clear();
 
     for (const auto& spot : m_spotMarkers) {
         const int x = mhzToX(spot.freqMhz);
@@ -1624,6 +1637,7 @@ void SpectrumWidget::drawSpotMarkers(QPainter& p, const QRect& specRect)
             continue;
 
         placed.append(labelRect);
+        m_spotClickRects.append({labelRect, spot.freqMhz});
 
         // Background pill
         p.setPen(Qt::NoPen);
