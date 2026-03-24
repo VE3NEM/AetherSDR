@@ -1237,19 +1237,34 @@ void RadioModel::onStatusReceived(const QString& object,
         const auto m = wfRe.match(object);
         if (m.hasMatch()) {
             const QString wfId = m.captured(1);
-            if (activeWfId().isEmpty()) {
-                // Only claim waterfall when client_handle confirms ownership
+            // Check if this waterfall belongs to one of our panadapters
+            bool ours = false;
+            for (auto* pan : m_panadapters) {
+                if (pan->waterfallId() == wfId) { ours = true; break; }
+            }
+            if (!ours) {
+                // Not yet associated — check client_handle ownership
                 if (!kvs.contains("client_handle"))
                     return;  // defer — can't confirm ownership yet
                 quint32 owner = kvs["client_handle"].toUInt(nullptr, 16);
                 if (owner != clientHandle())
                     return;  // not our waterfall
-                setActiveWfId(wfId);
-                updateStreamFilters();
-                qCDebug(lcProtocol) << "RadioModel: claimed waterfall" << activeWfId();
-            } else if (wfId != activeWfId()) {
-                return;  // not our waterfall
+                // Associate with matching panadapter by convention:
+                // wfId 0x42000000 → panId 0x40000000, 0x42000001 → 0x40000001
+                for (auto* pan : m_panadapters) {
+                    if (pan->waterfallId().isEmpty() || pan->waterfallId() == wfId) {
+                        pan->setWaterfallId(wfId);
+                        ours = true;
+                        break;
+                    }
+                }
             }
+            if (!ours) return;
+
+            if (activeWfId().isEmpty())
+                setActiveWfId(wfId);
+            updateStreamFilters();
+            qCDebug(lcProtocol) << "RadioModel: claimed waterfall" << wfId;
         }
         if (!activeWfConfigured() && !activeWfId().isEmpty() && isConnected()) {
             setActiveWfConfigured(true);
