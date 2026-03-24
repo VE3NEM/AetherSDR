@@ -2557,7 +2557,18 @@ void MainWindow::wirePanadapter(PanadapterApplet* applet)
             // Filter offsets: let the radio apply the correct default for
             // the recalled mode. Recalling saved filter widths across mode
             // changes produces wrong results (e.g. 3kHz USB filter on CW).
-            if (spectrum()) spectrum()->setStepSize(step);
+            // Defer step recall until after mode echo (mode change resets step)
+            if (step > 0) {
+                auto conn = std::make_shared<QMetaObject::Connection>();
+                *conn = connect(s, &SliceModel::stepChanged, this,
+                    [this, s, conn, step](int, const QVector<int>&) {
+                        disconnect(*conn);
+                        // Set step on radio (persists through mode change)
+                        m_radioModel.sendCommand(
+                            QString("slice set %1 step=%2").arg(s->sliceId()).arg(step));
+                        if (spectrum()) spectrum()->setStepSize(step);
+                    });
+            }
 
             // Radio-side DSP flags
             auto setDsp = [&](const QString& key, const QString& cmd, bool cur) {
