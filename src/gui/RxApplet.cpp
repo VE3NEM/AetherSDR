@@ -1593,21 +1593,8 @@ void RxApplet::updateModeSettings(const QString& mode)
         m_sqlBtn->setChecked(true);
     }
 
-    // Update step sizes, keeping closest step to previous value
-    const int prevStep = (m_stepIdx >= 0 && m_stepIdx < m_stepSizes.size())
-                             ? m_stepSizes[m_stepIdx] : 100;
-    m_stepSizes = settings.stepSizes;
-    rebuildStepSizes();
-
-    // Find closest step size to what was previously selected
-    m_stepIdx = 0;
-    int bestDist = std::abs(m_stepSizes[0] - prevStep);
-    for (int i = 1; i < m_stepSizes.size(); ++i) {
-        int dist = std::abs(m_stepSizes[i] - prevStep);
-        if (dist < bestDist) { bestDist = dist; m_stepIdx = i; }
-    }
-    m_stepLabel->setText(formatStepLabel(m_stepSizes[m_stepIdx]));
-    emit stepSizeChanged(m_stepSizes[m_stepIdx]);
+    // Step sizes are radio-authoritative — driven by SliceModel::stepChanged
+    // signal connected in connectSlice(). No client-side step update here.
 
     // Refresh filter highlight for current slice filter
     if (m_slice) updateFilterButtons();
