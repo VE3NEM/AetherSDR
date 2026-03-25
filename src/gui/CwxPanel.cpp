@@ -25,14 +25,22 @@ public:
     CwxBubble(const QString& text, const QString& time, QWidget* parent = nullptr)
         : QWidget(parent), m_text(text), m_time(time)
     {
+        recalcSize();
+    }
+
+    void resizeEvent(QResizeEvent*) override { recalcSize(); }
+
+    void recalcSize()
+    {
         QFont textFont("monospace", 12);
         QFont timeFont("monospace", 8);
         QFontMetrics tfm(textFont);
         QFontMetrics sfm(timeFont);
-        int textW = tfm.horizontalAdvance(m_text) + 24;
-        int maxW = parent ? parent->width() - 20 : 220;
-        setFixedHeight(tfm.height() + sfm.height() + 14);
-        setMinimumWidth(qMin(textW, maxW));
+        int availW = (parentWidget() ? parentWidget()->width() : 240) - 28;
+        QRect textBound = tfm.boundingRect(QRect(0, 0, availW, 10000),
+                                           Qt::TextWordWrap | Qt::AlignLeft, m_text);
+        int h = textBound.height() + sfm.height() + 18;
+        setFixedHeight(h);
     }
 
     void paintEvent(QPaintEvent*) override
@@ -45,20 +53,21 @@ public:
         p.setBrush(QColor(0x00, 0xb4, 0xd8));
         p.drawRoundedRect(r, 10, 10);
 
-        // CW text — 10pt, left aligned, top
+        // CW text — 12pt, left aligned, word wrap
         QFont textFont("monospace", 12);
         p.setFont(textFont);
         p.setPen(QColor(0, 0, 0));
         QFontMetrics tfm(textFont);
         QRect textRect = r.adjusted(10, 4, -10, 0);
-        textRect.setHeight(tfm.height());
-        p.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, m_text);
+        QRect textBound = tfm.boundingRect(textRect, Qt::TextWordWrap | Qt::AlignLeft, m_text);
+        p.drawText(textRect.adjusted(0, 0, 0, textBound.height()),
+                   Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop, m_text);
 
         // Timestamp — 8pt, right aligned, below text
         QFont timeFont("monospace", 8);
         p.setFont(timeFont);
         p.setPen(QColor(0x00, 0x30, 0x40));
-        QRect timeRect = r.adjusted(10, tfm.height() + 4, -6, -2);
+        QRect timeRect = r.adjusted(10, textBound.height() + 6, -6, -2);
         p.drawText(timeRect, Qt::AlignRight | Qt::AlignTop, m_time);
     }
 
