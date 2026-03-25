@@ -17,9 +17,6 @@ QString CwxModel::macro(int idx) const
 void CwxModel::send(const QString& text)
 {
     if (text.isEmpty()) return;
-    if (m_sendBuffer.isEmpty())
-        m_bufferBaseIndex = m_sentIndex + 1;  // next sent index after current
-    m_sendBuffer.append(text);  // track for charAtIndex
     // Encode spaces as DEL (0x7f) per FlexLib protocol
     QString encoded = text;
     encoded.replace(' ', QChar(0x7f));
@@ -29,22 +26,9 @@ void CwxModel::send(const QString& text)
 void CwxModel::sendChar(const QString& ch)
 {
     if (ch.isEmpty()) return;
-    if (m_sendBuffer.isEmpty())
-        m_bufferBaseIndex = m_sentIndex + 1;
-    m_sendBuffer.append(ch);  // track for charAtIndex
     QString encoded = ch;
     encoded.replace(' ', QChar(0x7f));
     emit commandReady(QString("cwx send \"%1\" %2").arg(encoded).arg(m_nextBlock++));
-}
-
-QChar CwxModel::charAtIndex(int index) const
-{
-    if (m_sendBuffer.isEmpty()) return QChar();
-    // m_bufferBaseIndex is the cumulative sent index of the first char in m_sendBuffer
-    int localIdx = index - m_bufferBaseIndex;
-    if (localIdx >= 0 && localIdx < m_sendBuffer.length())
-        return m_sendBuffer.at(localIdx);
-    return QChar();
 }
 
 void CwxModel::sendMacro(int idx)

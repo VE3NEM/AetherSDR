@@ -86,11 +86,6 @@ public:
     // Plays RADE decoded speech (int16 stereo 24kHz) bypassing m_radeMode block
     void feedDecodedSpeech(const QByteArray& pcm);
 
-    // Client-side CW sidetone generation
-    void playSidetone(QChar ch, int wpm, int pitchHz);
-    void setSidetoneEnabled(bool on) { m_sidetoneEnabled = on; }
-    bool sidetoneEnabled() const { return m_sidetoneEnabled; }
-
     // Client-side NR2 (spectral noise reduction)
     void setNr2Enabled(bool on);
     bool nr2Enabled() const { return m_nr2Enabled; }
@@ -180,10 +175,6 @@ private:
     std::vector<int16_t> m_nr2Mono;
     std::vector<int16_t> m_nr2Processed;
     QByteArray m_nr2Output;
-
-    // Client-side CW sidetone
-    bool   m_sidetoneEnabled{false};
-    double m_sidetonePhase{0.0};     // phase accumulator for continuous tone
 
     // VITA-49 TX constants
     static constexpr int    TX_SAMPLES_PER_PACKET = 128;  // stereo pairs

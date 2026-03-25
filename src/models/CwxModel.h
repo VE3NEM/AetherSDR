@@ -34,9 +34,6 @@ public:
     // Status parsing (from radio)
     void applyStatus(const QMap<QString, QString>& kvs);
 
-    // Look up the character at a cumulative sent index
-    QChar charAtIndex(int index) const;
-
 signals:
     void commandReady(const QString& cmd);
     void speedChanged(int wpm);
@@ -55,8 +52,6 @@ private:
     int     m_sentIndex{-1};
     int     m_nextBlock{1};
     QString m_macros[12];
-    QString m_sendBuffer;      // cumulative text for charAtIndex lookup
-    int     m_bufferBaseIndex{0}; // cumulative sent index of first char in buffer
 };
 
 } // namespace AetherSDR

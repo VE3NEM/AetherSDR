@@ -926,14 +926,12 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 sizes[1] = total - cwxW;
                 m_splitter->setSizes(sizes);
             }
-            // Enable CWX: synccwx syncs keying, sidetone enables tone on physical outputs
+            // Enable CWX sidetone: synccwx syncs keying, sidetone enables tone,
+            // mon enables monitor so PC Audio users can hear it
             m_radioModel.sendCommand("cw synccwx 1");
             m_radioModel.sendCommand("cw sidetone 1");
-            // Enable client-side sidetone generation for PC Audio
-            m_audio.setSidetoneEnabled(true);
         } else {
             m_radioModel.sendCommand("cw synccwx 0");
-            m_audio.setSidetoneEnabled(false);
         }
         return true;
     }
@@ -1404,17 +1402,6 @@ void MainWindow::buildUI()
     m_cwxPanel = new CwxPanel(m_radioModel.cwxModel(), splitter);
     splitter->addWidget(m_cwxPanel);
     m_cwxPanel->hide();
-
-    // Client-side CW sidetone: play tone for each character as radio keys it
-    connect(m_radioModel.cwxModel(), &CwxModel::charSent,
-            this, [this](int index) {
-        auto* cwx = m_radioModel.cwxModel();
-        QChar ch = cwx->charAtIndex(index);
-        if (!ch.isNull()) {
-            int pitch = m_radioModel.transmitModel()->cwPitch();
-            m_audio.playSidetone(ch, cwx->speed(), pitch > 0 ? pitch : 600);
-        }
-    });
 
     // Centre — panadapter stack (one or more FFT + waterfall panes)
     m_panStack = new PanadapterStack(splitter);
