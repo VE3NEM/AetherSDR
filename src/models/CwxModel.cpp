@@ -138,8 +138,10 @@ void CwxModel::applyStatus(const QMap<QString, QString>& kvs)
             bool ok;
             int idx = key.mid(5).toInt(&ok);
             if (ok && idx >= 1 && idx <= 12) {
-                // Decode: \u007f → space, * → =
+                // Decode: strip quotes, \u007f → space, * → =
                 QString decoded = val;
+                if (decoded.startsWith('"') && decoded.endsWith('"'))
+                    decoded = decoded.mid(1, decoded.length() - 2);
                 decoded.replace(QChar(0x7f), ' ');
                 decoded.replace('*', '=');
                 m_macros[idx - 1] = decoded;
