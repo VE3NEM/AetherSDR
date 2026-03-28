@@ -11,6 +11,9 @@
 #include "core/WanConnection.h"
 #include "core/CwDecoder.h"
 #include "core/DxClusterClient.h"
+#ifdef HAVE_MQTT
+#include "core/PskReporterClient.h"
+#endif
 #ifdef HAVE_SERIALPORT
 #include "core/SerialPortController.h"
 #endif
@@ -105,6 +108,9 @@ private:
     CwDecoder         m_cwDecoder;
     DxClusterClient   m_dxCluster;
     DxClusterClient   m_rbnClient;
+#ifdef HAVE_MQTT
+    PskReporterClient m_pskClient;
+#endif
 
     // Spot deduplication: callsign → {freqMhz, timestamp ms}
     struct SpotDedup {

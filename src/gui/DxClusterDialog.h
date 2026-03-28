@@ -6,6 +6,9 @@
 #include <QSet>
 #include <QVector>
 #include "core/DxClusterClient.h"
+#ifdef HAVE_MQTT
+#include "core/PskReporterClient.h"
+#endif
 
 class QLineEdit;
 class QSpinBox;
@@ -19,6 +22,9 @@ namespace AetherSDR {
 
 class DxClusterClient;
 class RadioModel;
+#ifdef HAVE_MQTT
+class PskReporterClient;
+#endif
 
 // ── Spot list table model ───────────────────────────────────────────────────
 
@@ -71,6 +77,9 @@ class DxClusterDialog : public QDialog {
 
 public:
     explicit DxClusterDialog(DxClusterClient* clusterClient, DxClusterClient* rbnClient,
+#ifdef HAVE_MQTT
+                             PskReporterClient* pskClient,
+#endif
                              RadioModel* radioModel, QWidget* parent = nullptr);
 
     void updateStatus();
@@ -81,6 +90,8 @@ signals:
     void disconnectRequested();
     void rbnConnectRequested(const QString& host, quint16 port, const QString& callsign);
     void rbnDisconnectRequested();
+    void pskConnectRequested(const QString& callsign);
+    void pskDisconnectRequested();
     void tuneRequested(double freqMhz);
     void settingsChanged();
     void spotsClearedAll();
@@ -88,11 +99,17 @@ signals:
 private:
     void buildClusterTab(QTabWidget* tabs);
     void buildRbnTab(QTabWidget* tabs);
+#ifdef HAVE_MQTT
+    void buildPskTab(QTabWidget* tabs);
+#endif
     void buildSpotListTab(QTabWidget* tabs);
     void buildDisplayTab(QTabWidget* tabs);
 
     DxClusterClient* m_client;
     DxClusterClient* m_rbnClient;
+#ifdef HAVE_MQTT
+    PskReporterClient* m_pskClient{nullptr};
+#endif
     RadioModel*      m_radioModel;
 
     // Cluster tab
@@ -116,6 +133,15 @@ private:
     QPlainTextEdit* m_rbnConsole;
     QLineEdit*      m_rbnCmdEdit;
     QPushButton*    m_rbnSendBtn;
+
+#ifdef HAVE_MQTT
+    // PSKReporter tab
+    QLineEdit*      m_pskCallEdit;
+    QPushButton*    m_pskConnectBtn;
+    QPushButton*    m_pskAutoConnectBtn;
+    QLabel*         m_pskStatusLabel;
+    QPlainTextEdit* m_pskConsole;
+#endif
 
     // Spot list tab
     SpotTableModel*        m_spotModel;

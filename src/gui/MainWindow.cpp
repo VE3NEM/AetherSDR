@@ -289,6 +289,30 @@ MainWindow::MainWindow(QWidget* parent)
         });
     }
 
+#ifdef HAVE_MQTT
+    // ── PSKReporter — MQTT spot forwarding with dedup ───────────────────
+    connect(&m_pskClient, &PskReporterClient::spotReceived,
+            this, [this, isDuplicateSpot](const DxSpot& spot) {
+        if (!m_radioModel.isConnected()) return;
+        if (isDuplicateSpot(spot)) return;
+        QString call = QString(spot.dxCall).replace(' ', QChar(0x7f));
+        QString freq = QString::number(spot.freqMhz, 'f', 6);
+        QString cmd = "spot add callsign=" + call + " rx_freq=" + freq
+                     + " tx_freq=" + freq
+                     + " source=PSKReporter"
+                     + " spotter_callsign=" + spot.spotterCall
+                     + " lifetime_seconds=" + QString::number(
+                           AppSettings::instance().value("DxClusterSpotLifetime", 30).toInt() * 60);
+        if (!spot.comment.isEmpty())
+            cmd += " comment=" + QString(spot.comment).replace(' ', QChar(0x7f));
+        m_radioModel.sendCmdPublic(cmd, [](int code, const QString& body) {
+            if (code != 0)
+                qWarning() << "PSK: spot add failed, code:" << Qt::hex << code
+                           << "body:" << body;
+        });
+    });
+#endif
+
     // ── Wire up radio model ────────────────────────────────────────────────
     connect(&m_radioModel, &RadioModel::connectionStateChanged,
             this, &MainWindow::onConnectionStateChanged);
@@ -1271,7 +1295,11 @@ void MainWindow::buildMenuBar()
     settingsMenu->addAction("USB Cables...");
     auto* spotsAction = settingsMenu->addAction("SpotHub...");
     connect(spotsAction, &QAction::triggered, this, [this] {
-        DxClusterDialog dlg(&m_dxCluster, &m_rbnClient, &m_radioModel, this);
+        DxClusterDialog dlg(&m_dxCluster, &m_rbnClient,
+#ifdef HAVE_MQTT
+                            &m_pskClient,
+#endif
+                            &m_radioModel, this);
         dlg.setTotalSpots(m_radioModel.spotModel()->spots().size());
         // Live preview: refresh spots on every display settings change
         auto refreshSpots = [this]() {
@@ -1309,6 +1337,14 @@ void MainWindow::buildMenuBar()
         });
         connect(&dlg, &DxClusterDialog::rbnDisconnectRequested,
                 this, [this] { m_rbnClient.disconnect(); });
+#ifdef HAVE_MQTT
+        connect(&dlg, &DxClusterDialog::pskConnectRequested,
+                this, [this](const QString& call) {
+            m_pskClient.connectToServer(call);
+        });
+        connect(&dlg, &DxClusterDialog::pskDisconnectRequested,
+                this, [this] { m_pskClient.disconnect(); });
+#endif
         connect(&dlg, &DxClusterDialog::spotsClearedAll,
                 this, [this] { m_spotDedup.clear(); });
         connect(&dlg, &DxClusterDialog::tuneRequested,
@@ -2079,10 +2115,23 @@ void MainWindow::onConnectionStateChanged(bool connected)
                 if (!call.isEmpty() && !m_rbnClient.isConnected())
                     m_rbnClient.connectToCluster(host, rPort, call);
             }
+#ifdef HAVE_MQTT
+            // Auto-connect PSKReporter if enabled
+            if (cs.value("PskAutoConnect", "False").toString() == "True") {
+                QString call = cs.value("PskReporterCallsign").toString();
+                if (call.isEmpty())
+                    call = cs.value("DxClusterCallsign").toString();
+                if (!call.isEmpty() && !m_pskClient.isConnected())
+                    m_pskClient.connectToServer(call);
+            }
+#endif
         }
     } else {
         m_dxCluster.disconnect();
         m_rbnClient.disconnect();
+#ifdef HAVE_MQTT
+        m_pskClient.disconnect();
+#endif
         m_connStatusLabel->setText("Disconnected");
         m_radioInfoLabel->setText("");
         m_radioVersionLabel->setText("");
