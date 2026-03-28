@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QTcpSocket>
 #include <QTimer>
+#include <QFile>
 #include <QString>
 #include <QTime>
 
@@ -14,6 +15,7 @@ struct DxSpot {
     QString dxCall;         // JA1ABC
     QString comment;        // "CW big signal"
     QTime   utcTime;        // 18:24 UTC
+    QString source;         // "Cluster" or "RBN"
 };
 
 // Telnet client for DX cluster nodes (DX Spider, AR-Cluster, CC Cluster).
@@ -34,6 +36,8 @@ public:
 
     QString host() const { return m_host; }
     quint16 port() const { return m_port; }
+    QString logFilePath() const;
+    void setLogFileName(const QString& name) { m_logFileName = name; }
 
 signals:
     void connected();
@@ -58,7 +62,9 @@ private:
     QTcpSocket m_socket;
     QByteArray m_readBuffer;
     QTimer     m_reconnectTimer;
+    QFile      m_logFile;
 
+    QString m_logFileName{"dxcluster.log"};
     QString m_host;
     quint16 m_port{7300};
     QString m_callsign;

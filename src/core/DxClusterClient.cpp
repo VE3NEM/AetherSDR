@@ -2,6 +2,9 @@
 #include "LogManager.h"
 
 #include <QRegularExpression>
+#include <QStandardPaths>
+#include <QDateTime>
+#include <QDir>
 #include <algorithm>
 
 namespace AetherSDR {
@@ -23,8 +26,15 @@ DxClusterClient::~DxClusterClient()
 {
     m_intentionalDisconnect = true;
     m_reconnectTimer.stop();
+    m_logFile.close();
     if (m_socket.state() != QAbstractSocket::UnconnectedState)
         m_socket.abort();
+}
+
+QString DxClusterClient::logFilePath() const
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+           + "/AetherSDR/" + m_logFileName;
 }
 
 void DxClusterClient::connectToCluster(const QString& host, quint16 port, const QString& callsign)
@@ -69,6 +79,10 @@ void DxClusterClient::sendCommand(const QString& cmd)
 {
     if (!m_connected) return;
     qCDebug(lcDxCluster) << "DxClusterClient TX:" << cmd;
+    if (m_logFile.isOpen()) {
+        m_logFile.write(("> " + cmd + "\n").toUtf8());
+        m_logFile.flush();
+    }
     m_socket.write((cmd + "\r\n").toLatin1());
 }
 
@@ -79,6 +93,19 @@ void DxClusterClient::onConnected()
     qCDebug(lcDxCluster) << "DxClusterClient: TCP connected to" << m_host;
     m_connected = true;
     m_reconnectAttempts = 0;
+
+    // Open log file (truncate on each new connection)
+    m_logFile.close();
+    m_logFile.setFileName(logFilePath());
+    QDir().mkpath(QFileInfo(m_logFile).absolutePath());
+    if (m_logFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        m_logFile.write(QString("--- Connected to %1:%2 at %3 ---\n")
+            .arg(m_host).arg(m_port)
+            .arg(QDateTime::currentDateTimeUtc().toString("yyyy-MM-dd HH:mm:ss UTC"))
+            .toUtf8());
+        m_logFile.flush();
+    }
+
     emit connected();
 }
 
@@ -156,6 +183,12 @@ void DxClusterClient::onReadyRead()
         m_readBuffer.remove(0, idx + 1);
 
         if (line.isEmpty()) continue;
+
+        // Write to log file
+        if (m_logFile.isOpen()) {
+            m_logFile.write((line + "\n").toUtf8());
+            m_logFile.flush();
+        }
 
         emit rawLineReceived(line);
         handleLine(line);

@@ -13,7 +13,7 @@ SpotSettingsDialog::SpotSettingsDialog(RadioModel* model, QWidget* parent)
     : QDialog(parent), m_model(model)
 {
     setWindowTitle("Spot Settings");
-    setFixedSize(380, 440);
+    setFixedSize(380, 480);
 
     // Load persisted settings
     auto& s = AppSettings::instance();
@@ -27,6 +27,7 @@ SpotSettingsDialog::SpotSettingsDialog(RadioModel* model, QWidget* parent)
     m_spotColor  = QColor(s.value("SpotsOverrideColor", "#FFFF00").toString());
     m_bgColor    = QColor(s.value("SpotsOverrideBgColor", "#000000").toString());
     m_bgOpacity  = s.value("SpotsBackgroundOpacity", 48).toInt();
+    int lifetimeMin = s.value("DxClusterSpotLifetime", 30).toInt();
 
     auto* root = new QVBoxLayout(this);
 
@@ -113,6 +114,32 @@ SpotSettingsDialog::SpotSettingsDialog(RadioModel* model, QWidget* parent)
         save("SpotFontSize", QString::number(v));
     });
     grid->addLayout(fontRow, row++, 1);
+
+    // ── Spot Lifetime slider ──────────────────────────────────────────
+    grid->addWidget(new QLabel("Spot Lifetime:"), row, 0);
+    auto* lifeRow = new QHBoxLayout;
+    auto* lifetimeSlider = new QSlider(Qt::Horizontal);
+    lifetimeSlider->setRange(1, 1440);
+    lifetimeSlider->setValue(lifetimeMin);
+    auto formatLifetime = [](int mins) -> QString {
+        if (mins < 60)
+            return QString("%1 min%2").arg(mins).arg(mins == 1 ? "" : "s");
+        int hrs = mins / 60;
+        int rem = mins % 60;
+        if (rem == 0)
+            return QString("%1 hr%2").arg(hrs).arg(hrs == 1 ? "" : "s");
+        return QString("%1 hr%2 %3 min%4").arg(hrs).arg(hrs == 1 ? "" : "s").arg(rem).arg(rem == 1 ? "" : "s");
+    };
+    auto* lifetimeValue = new QLabel(formatLifetime(lifetimeMin));
+    lifetimeValue->setFixedWidth(90);
+    lifetimeValue->setAlignment(Qt::AlignRight);
+    lifeRow->addWidget(lifetimeSlider);
+    lifeRow->addWidget(lifetimeValue);
+    connect(lifetimeSlider, &QSlider::valueChanged, this, [save, lifetimeValue, formatLifetime](int v) {
+        lifetimeValue->setText(formatLifetime(v));
+        save("DxClusterSpotLifetime", QString::number(v));
+    });
+    grid->addLayout(lifeRow, row++, 1);
 
     // ── Override Colors + color picker ──────────────────────────────────
     grid->addWidget(new QLabel("Override Colors:"), row, 0);

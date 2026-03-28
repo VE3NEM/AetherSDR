@@ -104,6 +104,14 @@ private:
     AntennaGeniusModel m_antennaGenius;
     CwDecoder         m_cwDecoder;
     DxClusterClient   m_dxCluster;
+    DxClusterClient   m_rbnClient;
+
+    // Spot deduplication: callsign → {freqMhz, timestamp ms}
+    struct SpotDedup {
+        double freqMhz;
+        qint64 addedMs;
+    };
+    QHash<QString, SpotDedup> m_spotDedup;
 #ifdef HAVE_SERIALPORT
     SerialPortController m_serialPort;
 #endif

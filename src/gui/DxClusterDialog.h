@@ -18,6 +18,7 @@ class QTableView;
 namespace AetherSDR {
 
 class DxClusterClient;
+class RadioModel;
 
 // ── Spot list table model ───────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ class SpotTableModel : public QAbstractTableModel {
     Q_OBJECT
 
 public:
-    enum Column { ColTime, ColFreq, ColDxCall, ColComment, ColSpotter, ColBand, ColCount };
+    enum Column { ColTime, ColFreq, ColDxCall, ColComment, ColSpotter, ColBand, ColSource, ColCount };
 
     explicit SpotTableModel(QObject* parent = nullptr) : QAbstractTableModel(parent) {}
 
@@ -69,22 +70,32 @@ class DxClusterDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit DxClusterDialog(DxClusterClient* client, QWidget* parent = nullptr);
+    explicit DxClusterDialog(DxClusterClient* clusterClient, DxClusterClient* rbnClient,
+                             RadioModel* radioModel, QWidget* parent = nullptr);
 
     void updateStatus();
+    void setTotalSpots(int count);
 
 signals:
     void connectRequested(const QString& host, quint16 port, const QString& callsign);
     void disconnectRequested();
+    void rbnConnectRequested(const QString& host, quint16 port, const QString& callsign);
+    void rbnDisconnectRequested();
     void tuneRequested(double freqMhz);
+    void settingsChanged();
+    void spotsClearedAll();
 
 private:
-    void buildSettingsTab(QTabWidget* tabs);
+    void buildClusterTab(QTabWidget* tabs);
+    void buildRbnTab(QTabWidget* tabs);
     void buildSpotListTab(QTabWidget* tabs);
+    void buildDisplayTab(QTabWidget* tabs);
 
     DxClusterClient* m_client;
+    DxClusterClient* m_rbnClient;
+    RadioModel*      m_radioModel;
 
-    // Settings tab
+    // Cluster tab
     QLineEdit*      m_hostEdit;
     QSpinBox*       m_portSpin;
     QLineEdit*      m_callEdit;
@@ -95,10 +106,24 @@ private:
     QLineEdit*      m_cmdEdit;
     QPushButton*    m_sendBtn;
 
+    // RBN tab
+    QLineEdit*      m_rbnHostEdit;
+    QSpinBox*       m_rbnPortSpin;
+    QLineEdit*      m_rbnCallEdit;
+    QPushButton*    m_rbnConnectBtn;
+    QPushButton*    m_rbnAutoConnectBtn;
+    QLabel*         m_rbnStatusLabel;
+    QPlainTextEdit* m_rbnConsole;
+    QLineEdit*      m_rbnCmdEdit;
+    QPushButton*    m_rbnSendBtn;
+
     // Spot list tab
     SpotTableModel*        m_spotModel;
     QTableView*            m_spotTable;
     BandFilterProxy*       m_proxyModel;
+
+    // Display tab
+    QLabel*         m_totalSpotsLabel{nullptr};
 };
 
 } // namespace AetherSDR

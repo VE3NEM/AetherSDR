@@ -22,7 +22,6 @@
 #include "RadioSetupDialog.h"
 #include "NetworkDiagnosticsDialog.h"
 #include "MemoryDialog.h"
-#include "SpotSettingsDialog.h"
 #include "DxClusterDialog.h"
 #include "CwxPanel.h"
 #include "DvkPanel.h"
@@ -221,9 +220,25 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     // ── DX Cluster — forward parsed spots to radio ──────────────────────
+    // Spot dedup helper — returns true if spot should be skipped
+    auto isDuplicateSpot = [this](const DxSpot& spot) -> bool {
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        int lifetimeMs = AppSettings::instance().value("DxClusterSpotLifetime", 30).toInt() * 60000;
+        auto it = m_spotDedup.find(spot.dxCall);
+        if (it != m_spotDedup.end()) {
+            bool sameFreq = std::abs(it->freqMhz - spot.freqMhz) < 0.001;  // within 1 kHz
+            bool expired = (now - it->addedMs) > lifetimeMs;
+            if (sameFreq && !expired)
+                return true;  // duplicate — skip
+        }
+        m_spotDedup[spot.dxCall] = {spot.freqMhz, now};
+        return false;
+    };
+
     connect(&m_dxCluster, &DxClusterClient::spotReceived,
-            this, [this](const DxSpot& spot) {
+            this, [this, isDuplicateSpot](const DxSpot& spot) {
         if (!m_radioModel.isConnected()) return;
+        if (isDuplicateSpot(spot)) return;
         // Build spot add command matching FlexLib Radio.cs field order
         QString call = QString(spot.dxCall).replace(' ', QChar(0x7f));
         QString freq = QString::number(spot.freqMhz, 'f', 6);
@@ -231,7 +246,8 @@ MainWindow::MainWindow(QWidget* parent)
                      + " tx_freq=" + freq
                      + " source=DXCluster"
                      + " spotter_callsign=" + spot.spotterCall
-                     + " lifetime_seconds=1800";
+                     + " lifetime_seconds=" + QString::number(
+                           AppSettings::instance().value("DxClusterSpotLifetime", 30).toInt() * 60);
         if (!spot.comment.isEmpty())
             cmd += " comment=" + QString(spot.comment).replace(' ', QChar(0x7f));
         m_radioModel.sendCmdPublic(cmd, [cmd](int code, const QString& body) {
@@ -240,6 +256,38 @@ MainWindow::MainWindow(QWidget* parent)
                            << "body:" << body << "cmd:" << cmd;
         });
     });
+
+    // ── RBN — rate-limited spot forwarding ───────────────────────────────
+    m_rbnClient.setLogFileName("rbn.log");
+    {
+        auto* rbnRateTimer = new QTimer(this);
+        rbnRateTimer->start(1000);
+        auto* rbnTokens = new int(10);
+        connect(rbnRateTimer, &QTimer::timeout, this, [rbnTokens] {
+            *rbnTokens = AppSettings::instance().value("RbnRateLimit", 10).toInt();
+        });
+        connect(&m_rbnClient, &DxClusterClient::spotReceived,
+                this, [this, rbnTokens, isDuplicateSpot](const DxSpot& spot) {
+            if (!m_radioModel.isConnected() || *rbnTokens <= 0) return;
+            if (isDuplicateSpot(spot)) return;
+            (*rbnTokens)--;
+            QString call = QString(spot.dxCall).replace(' ', QChar(0x7f));
+            QString freq = QString::number(spot.freqMhz, 'f', 6);
+            QString cmd = "spot add callsign=" + call + " rx_freq=" + freq
+                         + " tx_freq=" + freq
+                         + " source=RBN"
+                         + " spotter_callsign=" + spot.spotterCall
+                         + " lifetime_seconds=" + QString::number(
+                               AppSettings::instance().value("DxClusterSpotLifetime", 30).toInt() * 60);
+            if (!spot.comment.isEmpty())
+                cmd += " comment=" + QString(spot.comment).replace(' ', QChar(0x7f));
+            m_radioModel.sendCmdPublic(cmd, [](int code, const QString& body) {
+                if (code != 0)
+                    qWarning() << "RBN: spot add failed, code:" << Qt::hex << code
+                               << "body:" << body;
+            });
+        });
+    }
 
     // ── Wire up radio model ────────────────────────────────────────────────
     connect(&m_radioModel, &RadioModel::connectionStateChanged,
@@ -1221,11 +1269,11 @@ void MainWindow::buildMenuBar()
         dlg.exec();
     });
     settingsMenu->addAction("USB Cables...");
-    auto* spotsAction = settingsMenu->addAction("Spots...");
+    auto* spotsAction = settingsMenu->addAction("SpotHub...");
     connect(spotsAction, &QAction::triggered, this, [this] {
-        SpotSettingsDialog dlg(&m_radioModel, this);
+        DxClusterDialog dlg(&m_dxCluster, &m_rbnClient, &m_radioModel, this);
         dlg.setTotalSpots(m_radioModel.spotModel()->spots().size());
-        // Live preview: refresh spots on every settings change
+        // Live preview: refresh spots on every display settings change
         auto refreshSpots = [this]() {
             auto& s = AppSettings::instance();
             bool on       = s.value("IsSpotsEnabled", "True").toString() == "True";
@@ -1248,25 +1296,28 @@ void MainWindow::buildMenuBar()
                 sw->setSpotBgOpacity(bgOpacity);
             }
         };
-        connect(&dlg, &SpotSettingsDialog::settingsChanged, this, refreshSpots);
-        dlg.exec();
-        refreshSpots();  // final refresh on close
-    });
-    auto* dxClusterAction = settingsMenu->addAction("DX Cluster...");
-    connect(dxClusterAction, &QAction::triggered, this, [this] {
-        DxClusterDialog dlg(&m_dxCluster, this);
+        connect(&dlg, &DxClusterDialog::settingsChanged, this, refreshSpots);
         connect(&dlg, &DxClusterDialog::connectRequested,
                 this, [this](const QString& host, quint16 port, const QString& call) {
             m_dxCluster.connectToCluster(host, port, call);
         });
         connect(&dlg, &DxClusterDialog::disconnectRequested,
                 this, [this] { m_dxCluster.disconnect(); });
+        connect(&dlg, &DxClusterDialog::rbnConnectRequested,
+                this, [this](const QString& host, quint16 port, const QString& call) {
+            m_rbnClient.connectToCluster(host, port, call);
+        });
+        connect(&dlg, &DxClusterDialog::rbnDisconnectRequested,
+                this, [this] { m_rbnClient.disconnect(); });
+        connect(&dlg, &DxClusterDialog::spotsClearedAll,
+                this, [this] { m_spotDedup.clear(); });
         connect(&dlg, &DxClusterDialog::tuneRequested,
                 this, [this](double freqMhz) {
             if (auto* sl = activeSlice())
                 sl->setFrequency(freqMhz);
         });
         dlg.exec();
+        refreshSpots();  // final refresh on close
     });
     settingsMenu->addAction("multiFLEX...");
     auto* txBandAct = settingsMenu->addAction("TX Band Settings...");
@@ -2018,9 +2069,20 @@ void MainWindow::onConnectionStateChanged(bool connected)
                 if (!call.isEmpty() && !m_dxCluster.isConnected())
                     m_dxCluster.connectToCluster(host, cPort, call);
             }
+            // Auto-connect RBN if enabled
+            if (cs.value("RbnAutoConnect", "False").toString() == "True") {
+                QString host = cs.value("RbnHost", "telnet.reversebeacon.net").toString();
+                quint16 rPort = static_cast<quint16>(cs.value("RbnPort", 7000).toInt());
+                QString call = cs.value("RbnCallsign").toString();
+                if (call.isEmpty())
+                    call = cs.value("DxClusterCallsign").toString();
+                if (!call.isEmpty() && !m_rbnClient.isConnected())
+                    m_rbnClient.connectToCluster(host, rPort, call);
+            }
         }
     } else {
         m_dxCluster.disconnect();
+        m_rbnClient.disconnect();
         m_connStatusLabel->setText("Disconnected");
         m_radioInfoLabel->setText("");
         m_radioVersionLabel->setText("");

@@ -582,6 +582,14 @@ void SpectrumWidget::mousePressEvent(QMouseEvent* ev)
                 return;
             }
         }
+        // Click on a cluster badge → show popup with collapsed spots
+        for (const auto& cluster : m_spotClusters) {
+            if (cluster.rect.contains(pos)) {
+                showSpotClusterPopup(cluster, mapToGlobal(pos));
+                ev->accept();
+                return;
+            }
+        }
     }
 
     // Click on the divider bar → start split drag
@@ -952,6 +960,15 @@ void SpectrumWidget::mouseMoveEvent(QMouseEvent* ev)
                             setCursor(Qt::PointingHandCursor);
                             foundCursor = true;
                             break;
+                        }
+                    }
+                    if (!foundCursor) {
+                        for (const auto& cluster : m_spotClusters) {
+                            if (cluster.rect.contains(pos)) {
+                                setCursor(Qt::PointingHandCursor);
+                                foundCursor = true;
+                                break;
+                            }
                         }
                     }
                 }
@@ -1683,6 +1700,12 @@ void SpectrumWidget::drawSpotMarkers(QPainter& p, const QRect& specRect)
     // Track label positions to avoid overlap and for click detection
     QVector<QRect> placed;
     m_spotClickRects.clear();
+    m_spotClusters.clear();
+
+    // Track which spots overflow (can't be placed within max levels)
+    // Key: x pixel position (quantized to label width), Value: list of overflowed spots
+    QMap<int, QVector<SpotMarker>> overflowGroups;
+    constexpr int ClusterBinWidth = 40;  // pixels — spots within this range cluster together
 
     for (const auto& spot : m_spotMarkers) {
         const int x = mhzToX(spot.freqMhz);
@@ -1711,9 +1734,12 @@ void SpectrumWidget::drawSpotMarkers(QPainter& p, const QRect& specRect)
             if (labelRect.intersects(r))
                 labelRect.moveTop(r.bottom() + 3);
         }
-        // Don't draw if exceeds max levels
-        if (labelRect.bottom() > maxBottom)
+        // Overflow — collect for cluster badge
+        if (labelRect.bottom() > maxBottom) {
+            int bin = x / ClusterBinWidth;
+            overflowGroups[bin].append(spot);
             continue;
+        }
 
         placed.append(labelRect);
         m_spotClickRects.append({labelRect, spot.freqMhz});
@@ -1731,7 +1757,89 @@ void SpectrumWidget::drawSpotMarkers(QPainter& p, const QRect& specRect)
         p.drawText(labelRect, Qt::AlignCenter, label);
     }
 
+    // Draw cluster badges for overflow groups
+    if (!overflowGroups.isEmpty()) {
+        QFont badgeFont = spotFont;
+        badgeFont.setPixelSize(m_spotFontSize - 2);
+        p.setFont(badgeFont);
+        const QFontMetrics bfm(badgeFont);
+
+        for (auto it = overflowGroups.constBegin(); it != overflowGroups.constEnd(); ++it) {
+            const auto& spots = it.value();
+            if (spots.isEmpty()) continue;
+
+            // Position badge at average x of the group, at maxBottom
+            int avgX = 0;
+            for (const auto& s : spots)
+                avgX += mhzToX(s.freqMhz);
+            avgX /= spots.size();
+
+            const QString badgeText = QString("+%1").arg(spots.size());
+            const int bw = bfm.horizontalAdvance(badgeText) + 10;
+            QRect badgeRect(avgX - bw / 2, maxBottom + 2, bw, th);
+
+            // Nudge horizontally to avoid overlapping other badges/labels
+            for (const auto& r : placed) {
+                if (badgeRect.intersects(r))
+                    badgeRect.moveLeft(r.right() + 3);
+            }
+            placed.append(badgeRect);
+
+            // Draw badge with distinct style
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(0x30, 0x50, 0x70, 200));
+            p.drawRoundedRect(badgeRect, 3, 3);
+
+            p.setPen(QColor(0xff, 0xc0, 0x40));  // amber text
+            p.drawText(badgeRect, Qt::AlignCenter, badgeText);
+
+            // Store for click detection
+            SpotCluster cluster;
+            cluster.rect = badgeRect;
+            cluster.spots = spots;
+            m_spotClusters.append(cluster);
+        }
+
+        p.setFont(spotFont);  // restore spot font
+    }
+
     p.setFont(QFont());  // restore default
+}
+
+void SpectrumWidget::showSpotClusterPopup(const SpotCluster& cluster, const QPoint& globalPos)
+{
+    auto* menu = new QMenu(this);
+    menu->setStyleSheet(
+        "QMenu {"
+        "  background: #0f0f1a;"
+        "  border: 1px solid #305070;"
+        "  padding: 4px;"
+        "}"
+        "QMenu::item {"
+        "  color: #c8d8e8;"
+        "  padding: 4px 12px;"
+        "  font-size: 12px;"
+        "}"
+        "QMenu::item:selected {"
+        "  background: #1a3a5a;"
+        "  color: #00b4d8;"
+        "}");
+
+    for (const auto& spot : cluster.spots) {
+        QString text = QString("%1  %2 kHz")
+            .arg(spot.callsign, -10)
+            .arg(spot.freqMhz * 1000.0, 0, 'f', 1);
+        if (!spot.mode.isEmpty())
+            text += "  " + spot.mode;
+        auto* action = menu->addAction(text);
+        connect(action, &QAction::triggered, this, [this, freq = spot.freqMhz] {
+            emit frequencyClicked(freq);
+        });
+    }
+
+    menu->popup(globalPos);
+    // QMenu self-deletes on close with WA_DeleteOnClose
+    menu->setAttribute(Qt::WA_DeleteOnClose);
 }
 
 void SpectrumWidget::drawSliceMarkers(QPainter& p, const QRect& specRect, const QRect& wfRect)

@@ -182,6 +182,12 @@ public:
         QString mode;
     };
     void setSpotMarkers(const QVector<SpotMarker>& markers);
+
+    struct SpotCluster {
+        QRect rect;
+        QVector<SpotMarker> spots;
+    };
+
     void setShowSpots(bool on) { m_showSpots = on; update(); }
     bool showSpots() const { return m_showSpots; }
     void setSpotFontSize(int px) { m_spotFontSize = px; update(); }
@@ -244,6 +250,7 @@ private:
     void drawBandPlan(QPainter& p, const QRect& specRect);
     void drawTnfMarkers(QPainter& p, const QRect& specRect, const QRect& wfRect);
     void drawSpotMarkers(QPainter& p, const QRect& specRect);
+    void showSpotClusterPopup(const SpotCluster& cluster, const QPoint& globalPos);
     int  tnfAtPixel(int x) const;
     void drawWaterfall(QPainter& p, const QRect& r);
     void positionZoomButtons();
@@ -380,6 +387,8 @@ private:
     bool m_tnfGlobalEnabled{true};
     QVector<SpotMarker> m_spotMarkers;
     QVector<QPair<QRect, double>> m_spotClickRects;  // rect → freqMhz for click-to-tune
+
+    QVector<SpotCluster> m_spotClusters;
     bool m_showSpots{true};
     int  m_spotFontSize{16};
     int  m_spotMaxLevels{3};
