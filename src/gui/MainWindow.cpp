@@ -1027,6 +1027,61 @@ MainWindow::MainWindow(QWidget* parent)
             this, [this](bool dit, bool dah) {
         m_radioModel.sendCwPaddle(dit, dah);
     });
+
+    // ── FlexControl tuning knob ─────────────────────────────────────────
+    connect(&m_flexControl, &FlexControlManager::tuneSteps,
+            this, [this](int steps) {
+        auto* s = activeSlice();
+        if (!s || s->isLocked()) return;
+        int stepHz = spectrum() ? spectrum()->stepSize() : 100;
+        double newMhz = s->frequency() + steps * stepHz / 1e6;
+        QString panId = m_panStack ? m_panStack->activePanId() : m_radioModel.panId();
+        if (!panId.isEmpty())
+            m_radioModel.sendCommand(
+                QString("slice m %1 pan=%2").arg(newMhz, 0, 'f', 6).arg(panId));
+        if (spectrum()) spectrum()->setVfoFrequency(newMhz);
+    });
+
+    connect(&m_flexControl, &FlexControlManager::buttonPressed,
+            this, [this](int button, int action) {
+        // Look up configurable action from AppSettings
+        QString key = QString("FlexControlBtn%1Action%2").arg(button).arg(action);
+        auto& settings = AppSettings::instance();
+
+        // Defaults: Btn1=StepUp/StepDown, Btn2=ToggleMox/ToggleTune, Btn3=ToggleMute/ToggleLock
+        static const char* defaults[3][3] = {
+            {"StepUp",     "StepDown",     "None"},
+            {"ToggleMox",  "ToggleTune",   "None"},
+            {"ToggleMute", "ToggleLock",   "None"},
+        };
+        const char* def = (button >= 1 && button <= 3 && action >= 0 && action <= 2)
+                          ? defaults[button-1][action] : "None";
+        QString actionName = settings.value(key, def).toString();
+
+        // Dispatch action
+        if (actionName == "StepUp") {
+            if (auto* rx = m_appletPanel->rxApplet()) rx->cycleStepUp();
+        } else if (actionName == "StepDown") {
+            if (auto* rx = m_appletPanel->rxApplet()) rx->cycleStepDown();
+        } else if (actionName == "ToggleMox") {
+            m_radioModel.setTransmit(!m_radioModel.transmitModel()->isMox());
+        } else if (actionName == "ToggleTune") {
+            bool tuning = m_radioModel.transmitModel()->isTuning();
+            m_radioModel.sendCommand(QString("transmit tune %1").arg(tuning ? 0 : 1));
+        } else if (actionName == "ToggleMute") {
+            m_audio.setMuted(!m_audio.isMuted());
+        } else if (actionName == "ToggleLock") {
+            if (auto* s = activeSlice()) s->setLocked(!s->isLocked());
+        }
+    });
+
+    // Auto-detect FlexControl on startup
+    if (AppSettings::instance().value("FlexControlAutoDetect", "True").toString() == "True") {
+        QString fcPort = FlexControlManager::detectPort();
+        if (!fcPort.isEmpty()) {
+            m_flexControl.open(fcPort);
+        }
+    }
 #endif
 
     // ── P/CW applet: mic meters + ALC meter + model ────────────────────────
@@ -1420,6 +1475,16 @@ void MainWindow::buildMenuBar()
 #ifdef HAVE_SERIALPORT
             // Re-load serial port settings if changed
             m_serialPort.loadSettings();
+            // Re-check FlexControl open/close state
+            auto& fcs = AppSettings::instance();
+            if (fcs.value("FlexControlOpen", "False").toString() == "True") {
+                if (!m_flexControl.isOpen()) {
+                    QString port = fcs.value("FlexControlPort").toString();
+                    if (!port.isEmpty()) m_flexControl.open(port);
+                }
+            } else {
+                if (m_flexControl.isOpen()) m_flexControl.close();
+            }
 #endif
             // Re-evaluate CW decode overlay visibility
             bool decodeOn = AppSettings::instance().value("CwDecodeOverlay", "True").toString() == "True";

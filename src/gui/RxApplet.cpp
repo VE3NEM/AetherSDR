@@ -1627,6 +1627,24 @@ void RxApplet::rebuildStepSizes()
     if (m_stepIdx < 0) m_stepIdx = 0;
 }
 
+void RxApplet::cycleStepUp()
+{
+    if (m_stepIdx < m_stepSizes.size() - 1) {
+        m_stepIdx++;
+        m_stepLabel->setText(formatStepLabel(m_stepSizes[m_stepIdx]));
+        emit stepSizeChanged(m_stepSizes[m_stepIdx]);
+    }
+}
+
+void RxApplet::cycleStepDown()
+{
+    if (m_stepIdx > 0) {
+        m_stepIdx--;
+        m_stepLabel->setText(formatStepLabel(m_stepSizes[m_stepIdx]));
+        emit stepSizeChanged(m_stepSizes[m_stepIdx]);
+    }
+}
+
 void RxApplet::setInitialStepSize(int hz)
 {
     if (m_stepSizes.isEmpty()) return;

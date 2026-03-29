@@ -62,6 +62,7 @@ src/
 │   ├── PipeWireAudioBridge — Linux DAX: PulseAudio pipe modules (4 RX + 1 TX)
 │   ├── VirtualAudioBridge  — macOS DAX: CoreAudio HAL plugin shared memory bridge
 │   ├── SerialPortController— USB-serial PTT/CW keying (DTR/RTS out, CTS/DSR in)
+│   ├── FlexControlManager  — FlexControl USB tuning knob (VID 0x2192, 9600 8N1)
 │   ├── OpusCodec           — Opus encode/decode for SmartLink WAN audio compression
 │   ├── LogManager          — Per-module Qt Logging Categories with persistence
 │   ├── SupportBundle       — Collect logs+settings+sysinfo into tar.gz/zip for bug reports

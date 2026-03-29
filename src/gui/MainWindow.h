@@ -19,6 +19,7 @@
 #include <QThread>
 #ifdef HAVE_SERIALPORT
 #include "core/SerialPortController.h"
+#include "core/FlexControlManager.h"
 #endif
 
 #include <QMainWindow>
@@ -129,6 +130,7 @@ private:
     QStringList m_spotCmdBatch;
 #ifdef HAVE_SERIALPORT
     SerialPortController m_serialPort;
+    FlexControlManager   m_flexControl;
 #endif
 
     // GUI — left sidebar

@@ -5,6 +5,7 @@
 #include "core/AudioEngine.h"
 #ifdef HAVE_SERIALPORT
 #include "core/SerialPortController.h"
+#include "core/FlexControlManager.h"
 #include <QSerialPortInfo>
 #endif
 #include "core/FirmwareUploader.h"
@@ -2738,6 +2739,130 @@ QWidget* RadioSetupDialog::buildSerialTab()
             s.save();
         });
         vbox->addWidget(autoOpen);
+    }
+
+    // ── FlexControl tuning knob ────────────────────────────────────────
+    {
+        auto* group = new QGroupBox("FlexControl Tuning Knob");
+        group->setStyleSheet(kGroupStyle);
+        auto* grid = new QGridLayout(group);
+        grid->setSpacing(6);
+
+        // Status
+        auto* fcStatusLabel = new QLabel("Not detected");
+        fcStatusLabel->setStyleSheet("QLabel { color: #808080; font-size: 11px; }");
+        grid->addWidget(new QLabel("Status:"), 0, 0);
+        grid->addWidget(fcStatusLabel, 0, 1);
+
+        // Detect / Close buttons
+        auto* fcDetectBtn = new QPushButton("Detect");
+        fcDetectBtn->setFixedWidth(80);
+        fcDetectBtn->setStyleSheet(
+            "QPushButton { background: #00b4d8; color: #0f0f1a; font-weight: bold; "
+            "border: 1px solid #008ba8; padding: 3px; border-radius: 3px; }"
+            "QPushButton:hover { background: #00c8f0; }");
+        auto* fcCloseBtn = new QPushButton("Close");
+        fcCloseBtn->setFixedWidth(80);
+        fcCloseBtn->setStyleSheet(fcDetectBtn->styleSheet());
+        fcCloseBtn->setEnabled(false);
+
+        auto* btnRow = new QHBoxLayout;
+        btnRow->addWidget(fcDetectBtn);
+        btnRow->addWidget(fcCloseBtn);
+        btnRow->addStretch();
+        grid->addLayout(btnRow, 0, 2);
+
+        // Update status display
+        auto updateFcStatus = [fcStatusLabel, fcCloseBtn, fcDetectBtn]
+                              (bool connected, const QString& port = {}) {
+            if (connected) {
+                fcStatusLabel->setText(QString("Connected (%1)").arg(port));
+                fcStatusLabel->setStyleSheet("QLabel { color: #30d050; font-size: 11px; }");
+                fcCloseBtn->setEnabled(true);
+                fcDetectBtn->setEnabled(false);
+            } else {
+                fcStatusLabel->setText("Not detected");
+                fcStatusLabel->setStyleSheet("QLabel { color: #808080; font-size: 11px; }");
+                fcCloseBtn->setEnabled(false);
+                fcDetectBtn->setEnabled(true);
+            }
+        };
+
+        connect(fcDetectBtn, &QPushButton::clicked, this, [updateFcStatus] {
+            QString port = FlexControlManager::detectPort();
+            if (port.isEmpty()) {
+                updateFcStatus(false);
+                return;
+            }
+            updateFcStatus(true, port);
+            // Store port for MainWindow to open
+            auto& s = AppSettings::instance();
+            s.setValue("FlexControlPort", port);
+            s.setValue("FlexControlOpen", "True");
+            s.save();
+        });
+        connect(fcCloseBtn, &QPushButton::clicked, this, [updateFcStatus] {
+            updateFcStatus(false);
+            auto& s = AppSettings::instance();
+            s.setValue("FlexControlOpen", "False");
+            s.save();
+        });
+
+        // Show current state from settings
+        if (settings.value("FlexControlOpen", "False").toString() == "True") {
+            QString port = settings.value("FlexControlPort").toString();
+            if (!port.isEmpty())
+                updateFcStatus(true, port);
+        }
+
+        // Button action configuration
+        static const QStringList actions = {
+            "None", "StepUp", "StepDown", "ToggleMox",
+            "ToggleTune", "ToggleMute", "ToggleLock"
+        };
+        static const char* defaultActions[3][2] = {
+            {"StepUp", "StepDown"},
+            {"ToggleMox", "ToggleTune"},
+            {"ToggleMute", "ToggleLock"},
+        };
+        static const char* btnLabels[3] = {"Button 1:", "Button 2:", "Button 3:"};
+        static const char* actLabels[2] = {"Tap", "Double"};
+
+        for (int b = 0; b < 3; ++b) {
+            grid->addWidget(new QLabel(btnLabels[b]), b + 1, 0);
+            auto* row = new QHBoxLayout;
+            for (int a = 0; a < 2; ++a) {
+                row->addWidget(new QLabel(actLabels[a]));
+                auto* combo = new QComboBox;
+                combo->addItems(actions);
+                combo->setStyleSheet(QString(kEditStyle).replace("QLineEdit", "QComboBox"));
+                QString key = QString("FlexControlBtn%1Action%2").arg(b + 1).arg(a);
+                QString current = settings.value(key, defaultActions[b][a]).toString();
+                int idx = actions.indexOf(current);
+                if (idx >= 0) combo->setCurrentIndex(idx);
+                connect(combo, &QComboBox::currentTextChanged, this, [key](const QString& text) {
+                    auto& s = AppSettings::instance();
+                    s.setValue(key, text);
+                    s.save();
+                });
+                row->addWidget(combo);
+            }
+            row->addStretch();
+            grid->addLayout(row, b + 1, 1, 1, 2);
+        }
+
+        // Auto-detect checkbox
+        auto* autoDetect = new QCheckBox("Auto-detect on startup");
+        autoDetect->setStyleSheet("QCheckBox { color: #c8d8e8; }");
+        autoDetect->setChecked(settings.value("FlexControlAutoDetect", "True").toString() == "True");
+        connect(autoDetect, &QCheckBox::toggled, this, [](bool on) {
+            auto& s = AppSettings::instance();
+            s.setValue("FlexControlAutoDetect", on ? "True" : "False");
+            s.save();
+        });
+        grid->addWidget(autoDetect, 4, 0, 1, 3);
+
+        vbox->addWidget(group);
     }
 
     vbox->addStretch();

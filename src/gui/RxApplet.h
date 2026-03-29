@@ -39,6 +39,8 @@ public:
     void setSlice(SliceModel* slice);
     void setAfGain(int pct);
     void syncStepFromSlice(int stepHz, const QVector<int>& stepList);
+    void cycleStepUp();
+    void cycleStepDown();
 
     // Connect to transmit model for QSK (break_in) indicator.
     void setTransmitModel(class TransmitModel* txModel);

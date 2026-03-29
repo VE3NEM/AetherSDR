@@ -175,6 +175,7 @@ set(CORE_SOURCES
     src/core/LogManager.cpp
     src/core/SupportBundle.cpp
     src/core/SerialPortController.cpp
+    src/core/FlexControlManager.cpp
     src/core/OpusCodec.cpp
 )
 
