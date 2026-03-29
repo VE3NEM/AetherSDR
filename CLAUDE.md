@@ -922,6 +922,25 @@ and panadapter. The radio assigns these to our `client_handle`.
   with click-to-expand popup, per-source color coding, deduplication,
   configurable lifetimes, SNR-based alpha for WSJT-X, WSJT-X decode filters
   (CQ/CQ POTA/Calling Me), log file history per source.
+- **FreeDV Reporter spots**: real-time spot source via Socket.IO v4
+  WebSocket to qso.freedv.org. View-only auth, station state tracking,
+  spots from freq_change and rx_report events. QWebSocket with manual
+  Engine.IO/Socket.IO framing (no external dependencies). (#349)
+- **USB Cable management**: Radio Setup → USB Cables tab for configuring
+  USB-serial adapters plugged into the radio's rear USB ports. Supports
+  CAT, BCD, Bit (8-row grid), and Passthrough cable types. UsbCableModel
+  tracks cables via status messages, QStackedWidget property panels. (#40)
+- **FlexControl USB tuning knob**: auto-detect VID 0x2192 / PID 0x0010,
+  9600 8N1 serial protocol with D/U rotation (acceleration 02–06) and
+  3 configurable buttons (tap/double/hold). Radio Setup → Serial tab
+  config. Gated by HAVE_SERIALPORT. (#25)
+- **MIDI controller mapping**: class-compliant USB MIDI controller support
+  via RtMidi. 50+ mappable parameters (RX, TX, Phone/CW, EQ, Global).
+  MIDI Learn mode (select param, move knob, binding created). Dedicated
+  Settings → MIDI Mapping dialog with device selector, binding table,
+  activity indicator, and named profiles. Bindings stored in dedicated
+  ~/.config/AetherSDR/midi.settings XML file. Soft dependency (HAVE_MIDI).
+  (#355)
 
 ## What's NOT Yet Implemented
 

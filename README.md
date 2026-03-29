@@ -48,7 +48,8 @@ Tested with the **FLEX-8600** running v4.1.5 software. Should work with other Fl
 - dBm scale with drag-to-adjust, time scale on waterfall
 - ARRL band plan overlay on FFT display (color-coded CW/DATA/PHONE segments with license classes)
 - Spot frequency markers with hover tooltips (QRP calling, beacons, SSTV, etc.)
-- **SpotHub** — unified spot manager (Settings → SpotHub) with DX Cluster, RBN, WSJT-X, and POTA sources, sortable spot list with band filters, density badges, per-source color coding, and configurable lifetimes
+- **SpotHub** — unified spot manager (Settings → SpotHub) with DX Cluster, RBN, WSJT-X, POTA, and FreeDV sources, sortable spot list with band filters, density badges, per-source color coding, and configurable lifetimes
+- **FreeDV Reporter** — real-time FreeDV station spots via Socket.IO WebSocket to qso.freedv.org
 - Floating VFO widget with S-meter, frequency, and quick controls
 - Band selector with ARRL band plan defaults
 - Display sub-menu: AVG, FPS, FFT fill (opacity + color), weighted average
@@ -148,13 +149,36 @@ Tested with the **FLEX-8600** running v4.1.5 software. Should work with other Fl
 - PC audio input/output device selection with live switching
 - Full settings in Radio Setup → Audio tab
 
+### USB Cable Management
+- Configure USB-serial adapters plugged into the radio's rear USB ports
+- CAT cable: serial parameters, frequency source, auto-report
+- BCD cable: band decoder with polarity and HF/VHF selection
+- Bit cable: 8 independent bits with band/frequency/PTT/delay per bit
+- Passthrough cable: raw serial tunnel with configurable serial parameters
+
+### MIDI Controller Mapping
+- Map any class-compliant USB MIDI controller to 50+ AetherSDR parameters
+- **MIDI Learn** — select a parameter, move a knob, binding created automatically
+- Supports CC (knobs/faders), Note On/Off (buttons/pads), and Pitch Bend
+- Dedicated Settings → MIDI Mapping dialog with device selector and binding table
+- Real-time activity indicator showing incoming MIDI messages
+- Named profiles for different controllers (save/load)
+- Parameters: AF gain, squelch, RF power, MOX, TUNE, mic level, EQ bands, and more
+- Bindings persisted in dedicated `midi.settings` XML file
+- Optional dependency (RtMidi) — feature hidden when not available
+
 ### Radio Setup
-- Full settings dialog (9 tabs): Radio, Network, GPS, Audio, TX, Phone/CW, RX, Filters, XVTR
+- Full settings dialog (10 tabs): Radio, Network, GPS, Audio, TX, Phone/CW, RX, Filters, XVTR, USB Cables
 - Per-band TX settings: RF power, tune power, PTT inhibit, interlock routing
 - TX profile management
 - XVTR transverter configuration
 - **Firmware update** — upload .ssdr files directly from Linux (no Windows required)
 - Network diagnostics, memory channels, spot settings
+
+### External Control
+- **FlexControl USB tuning knob** — auto-detect, rotary tuning with acceleration, 3 configurable buttons
+- **MIDI controllers** — knobs, faders, and buttons mapped to radio parameters with Learn mode
+- **Serial PTT/CW keying** — USB-serial DTR/RTS output for PTT and CW key, CTS/DSR input for foot switch/paddle
 
 ### General
 - Click-to-tune and scroll-wheel tuning on spectrum
