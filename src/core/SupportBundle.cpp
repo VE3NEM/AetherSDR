@@ -56,27 +56,25 @@ QString SupportBundle::createBundle(const RadioInfo& radio)
     tmpDir.setAutoRemove(false);
     const QString tmp = tmpDir.path();
 
-    // 1. Copy log file
-    // On Windows, aethersdr.log may be a .lnk shortcut pointing to a
-    // timestamped log file. QFileInfo::isSymLink() detects .lnk files
-    // but symLinkTarget() may fail. Fall back to reading the file content
-    // directly to ensure we always get the actual log, not the shortcut.
-    QString logPath = logMgr.logFilePath();
-    QFileInfo logInfo(logPath);
-    if (logInfo.isSymLink()) {
-        QString target = logInfo.symLinkTarget();
-        if (!target.isEmpty() && QFile::exists(target))
-            logPath = target;
+    // 1. Copy log files — grab the 3 most recent timestamped logs.
+    // On Windows, aethersdr.log can be a .lnk shortcut (binary garbage).
+    // Bypasses symlink issues entirely by scanning for actual log files.
+    {
+        QDir logDir(QFileInfo(logMgr.logFilePath()).absolutePath());
+        QStringList logs = logDir.entryList(
+            {"aethersdr-*.log", "aethersdr.log"}, QDir::Files, QDir::Time);
+        int copied = 0;
+        for (const auto& name : logs) {
+            if (copied >= 3) break;
+            QFileInfo fi(logDir.absoluteFilePath(name));
+            // Skip shortcuts and tiny files
+            if (fi.isSymLink() || fi.size() < 100) continue;
+            QString dest = (copied == 0) ? "aethersdr.log"
+                                         : QString("aethersdr-%1.log").arg(copied);
+            QFile::copy(fi.absoluteFilePath(), tmp + "/" + dest);
+            ++copied;
+        }
     }
-    // If the file is still a shortcut (symLinkTarget failed), try the
-    // directory for the most recent timestamped log file instead.
-    if (QFileInfo(logPath).suffix() == "lnk" || QFileInfo(logPath).size() < 100) {
-        QDir logDir(QFileInfo(logPath).absolutePath());
-        QStringList logs = logDir.entryList({"aethersdr-*.log"}, QDir::Files, QDir::Time);
-        if (!logs.isEmpty())
-            logPath = logDir.absoluteFilePath(logs.first());
-    }
-    QFile::copy(logPath, tmp + "/aethersdr.log");
 
     // 2. System info JSON
     {
