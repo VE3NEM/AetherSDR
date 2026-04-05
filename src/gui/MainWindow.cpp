@@ -4315,9 +4315,8 @@ void MainWindow::onSliceAdded(SliceModel* s)
         m_splitTxSliceId = s->sliceId();
         s->setTxSlice(true);
         s->setAudioMute(true);  // TX slice in split has no audio output
-        // Tune TX slice to match RX slice frequency
-        if (auto* rxSlice = m_radioModel.slice(m_splitRxSliceId))
-            s->setFrequency(rxSlice->frequency());
+        // TX slice frequency is already set by the slice create command
+        // (with mode-dependent offset), so do NOT override it here (#789).
         spectrum()->setSplitPair(m_splitRxSliceId, m_splitTxSliceId);
         updateSplitState();
         // Auto-focus the TX VFO so the user can immediately tune the TX offset
