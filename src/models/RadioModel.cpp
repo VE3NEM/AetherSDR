@@ -1615,39 +1615,43 @@ void RadioModel::onStatusReceived(const QString& object,
         return;
     }
 
-    // License info (fw v1.4.0.0): two sub-objects:
-    //   "license"         — radio_id, issued, last_refreshed_date, highest_major_version, region
-    //   "license feature" — name, enabled, reason  (one message per feature)
-    // Subscription tier is inferred from the highest `reason` seen:
-    //   PLUS → "SmartSDR+"  |  BUILT_IN / LICENSE_FILE → "SmartSDR"
+    // License info (fw v1.4.0.0): three sub-objects per FlexLib:
+    //   "license"              — radio_id, issued, last_refreshed_date, highest_major_version, region
+    //   "license subscription" — name=smartsdr+|smartsdr+_early_access, expiration=<date>
+    //   "license feature"      — name, enabled, reason (BUILT_IN|LICENSE_FILE|PLUS|EA)
     if (object == "license" && !kvs.contains("name")) {
         if (kvs.contains("radio_id")) {
-            m_licenseRadioId = kvs["radio_id"];
+            m_licenseRadioId = kvs["radio_id"].toUpper();
         }
         if (kvs.contains("highest_major_version")) {
             m_licenseMaxVersion = kvs["highest_major_version"];
         }
-        if (kvs.contains("issued")) {
-            // Compute expiration as issued + 365 days.
-            // The radio sends ISO-8601: "2025-10-31T18:43:24.944Z"
-            const QString issuedStr = kvs["issued"].left(10);  // "YYYY-MM-DD"
-            const QDate issued = QDate::fromString(issuedStr, Qt::ISODate);
-            if (issued.isValid()) {
-                m_licenseExpirationDate =
-                    issued.addDays(365).toString("MM/dd/yyyy");  // matches SmartSDR display
-            }
+        // Base subscription is always "SmartSDR" — upgraded by subscription messages
+        if (m_licenseSubscription.isEmpty()) {
+            m_licenseSubscription = "SmartSDR";
+        }
+        emit infoChanged();
+        return;
+    }
+    if (object == "license subscription") {
+        // Per FlexLib: name=smartsdr+ or name=smartsdr+_early_access
+        // with expiration=<ISO-8601 date>
+        QString name = kvs.value("name").toLower();
+        QString expStr = kvs.value("expiration");
+        QDate expDate = QDate::fromString(expStr.left(10), Qt::ISODate);
+        bool active = expDate.isValid() && expDate >= QDate::currentDate();
+        if (name == "smartsdr+_early_access" && active) {
+            m_licenseSubscription = "SmartSDR+ Early Access";
+            m_licenseExpirationDate = expDate.toString("MM/dd/yyyy");
+        } else if (name == "smartsdr+" && active) {
+            m_licenseSubscription = "SmartSDR+";
+            m_licenseExpirationDate = expDate.toString("MM/dd/yyyy");
         }
         emit infoChanged();
         return;
     }
     if (object == "license feature") {
-        // Infer subscription tier from reason codes.
-        // PLUS features indicate a SmartSDR+ subscription.
-        if (kvs.value("reason") == "PLUS" && kvs.value("enabled") == "1") {
-            m_licenseSubscription = "SmartSDR+";
-        } else if (m_licenseSubscription.isEmpty()) {
-            m_licenseSubscription = "SmartSDR";
-        }
+        // Feature-level parsing — not needed for display, but log for debugging
         emit infoChanged();
         return;
     }
