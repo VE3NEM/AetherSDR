@@ -3,6 +3,76 @@
 All notable changes to AetherSDR are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [v0.8.7] — 2026-04-09
+
+### TCI Audio Fix, Elgato Stream Deck Plugin, Help Guides
+
+### New Features
+
+**Elgato Stream Deck plugin**
+- Native plugin for the official Elgato Stream Deck app (macOS/Windows)
+- 43 actions: TX, bands, modes, DSP, audio, slice controls, DVK
+- Pre-built distributable — download and double-click to install
+- StreamController plugin (Linux) also attached to releases
+- Automated workflow attaches both plugins to every release
+
+**Help guides**
+- Understanding Noise Cancellation guide (NR, NR2, RN2, NR4, DFNR, BNR comparison)
+- Configuring Data Modes guide (CAT, TCI, DAX walkthroughs for WSJT-X, JTDX, fldigi)
+
+**DEXP persistence (#1004)**
+- Optimistic updates for DEXP on/off and level (no status echo from radio)
+- Saved to AppSettings on change, restored on connect
+
+### Bug Fixes
+
+**TCI audio absent when using Radio Audio (#1014)**
+- remote_audio_rx stream always created on connect regardless of PC Audio state
+- PC Audio toggle now only controls local playback, never removes the stream
+- TCI clients receive audio whether PC Audio is on or off
+
+**Keyboard tuning fixes (#1005)**
+- Right arrow tuned wrong direction (stale base frequency)
+- Arrow keys now auto-repeat when held for continuous tuning
+- Uses tuneAndRecenter() for proper auto-center behavior
+
+**TX Delay not persisting (#996)**
+- Wired editingFinished signals for all interlock timing fields (ACC TX, TX Delay, RCA TX1/2/3, Timeout)
+
+**Duplicate Preferences menu entry (#1013)**
+- Set PreferencesRole directly on Radio Setup action — one entry on all platforms
+
+**TUN/AMP/AG applet state not persisting (#1042)**
+- Save checked state to AppSettings on toggle (was missing for hardware-conditional applets)
+
+**Mic bias/boost not reflecting toggle (#951)**
+- Optimistic update for mic bias and mic boost (radio sends no status echo)
+
+**RADE status label not appearing (#1049)**
+- Used vfoWidget(sliceId) instead of null vfoWidget() alias
+- Label now inline with frequency display instead of separate row
+
+**Finer mouse-wheel steps for Controls sliders (#1026)**
+- Use singleStep (1) instead of pageStep (10) for slider wheel events
+
+**DFNR model not found on system install (#1003)**
+- Added XDG, /usr/share, /usr/local/share search paths
+- CMake install() rule for model file
+
+**Intel Mac GPU rendering**
+- Disabled QRhiWidget on Intel Mac DMG builds (rendering issues on older Metal/OpenGL)
+
+### Removed
+
+**Native StreamDeck integration**
+- Replaced by TCI-based Elgato and StreamController plugins
+
+### Contributors
+
+- jensenpat — Keyboard tuning fixes, noise cancellation and data modes help guides
+- NF0T (Ryan B) — RADE label fix, mic bias/boost fix, applet persistence fix
+- AetherClaude (pi-claude) — TX Delay, slider steps, DFNR model paths
+
 ## [v0.8.6] — 2026-04-08
 
 ### DFNR AI Noise Reduction, Propagation Overlay, Community PR Blitz

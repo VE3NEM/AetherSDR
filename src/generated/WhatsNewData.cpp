@@ -6,6 +6,21 @@ namespace AetherSDR {
 
 const std::vector<ReleaseEntry>& whatsNewEntries() {
     static const std::vector<ReleaseEntry> entries = {
+        {QStringLiteral("0.8.7"), QStringLiteral("2026-04-09"), QStringLiteral("Removed"), {
+            {ChangeCategory::Feature, QStringLiteral("Elgato Stream Deck plugin"), QStringLiteral("Native plugin for the official Elgato Stream Deck app (macOS/Windows) 43 actions: TX, bands, modes, DSP, audio, slice controls, DVK Pre-built distributable — download and double-click to install St...")},
+            {ChangeCategory::Feature, QStringLiteral("Help guides"), QStringLiteral("Understanding Noise Cancellation guide (NR, NR2, RN2, NR4, DFNR, BNR comparison) Configuring Data Modes guide (CAT, TCI, DAX walkthroughs for WSJT-X, JTDX, fldigi)")},
+            {ChangeCategory::Feature, QStringLiteral("DEXP persistence"), QStringLiteral("Optimistic updates for DEXP on/off and level (no status echo from radio) Saved to AppSettings on change, restored on connect")},
+            {ChangeCategory::BugFix, QStringLiteral("TCI audio absent when using Radio Audio"), QStringLiteral("remote_audio_rx stream always created on connect regardless of PC Audio state PC Audio toggle now only controls local playback, never removes the stream TCI clients receive audio whether PC Audio i...")},
+            {ChangeCategory::BugFix, QStringLiteral("Keyboard tuning fixes"), QStringLiteral("Right arrow tuned wrong direction (stale base frequency) Arrow keys now auto-repeat when held for continuous tuning Uses tuneAndRecenter() for proper auto-center behavior")},
+            {ChangeCategory::BugFix, QStringLiteral("TX Delay not persisting"), QStringLiteral("Wired editingFinished signals for all interlock timing fields (ACC TX, TX Delay, RCA TX1/2/3, Timeout)")},
+            {ChangeCategory::BugFix, QStringLiteral("Duplicate Preferences menu entry"), QStringLiteral("Set PreferencesRole directly on Radio Setup action — one entry on all platforms")},
+            {ChangeCategory::BugFix, QStringLiteral("TUN/AMP/AG applet state not persisting"), QStringLiteral("Save checked state to AppSettings on toggle (was missing for hardware-conditional applets)")},
+            {ChangeCategory::BugFix, QStringLiteral("Mic bias/boost not reflecting toggle"), QStringLiteral("Optimistic update for mic bias and mic boost (radio sends no status echo)")},
+            {ChangeCategory::BugFix, QStringLiteral("RADE status label not appearing"), QStringLiteral("Used vfoWidget(sliceId) instead of null vfoWidget() alias Label now inline with frequency display instead of separate row")},
+            {ChangeCategory::BugFix, QStringLiteral("Finer mouse-wheel steps for Controls sliders"), QStringLiteral("Use singleStep (1) instead of pageStep (10) for slider wheel events")},
+            {ChangeCategory::BugFix, QStringLiteral("DFNR model not found on system install"), QStringLiteral("Added XDG, /usr/share, /usr/local/share search paths CMake install() rule for model file")},
+            {ChangeCategory::BugFix, QStringLiteral("Intel Mac GPU rendering"), QStringLiteral("Disabled QRhiWidget on Intel Mac DMG builds (rendering issues on older Metal/OpenGL)")},
+        }},
         {QStringLiteral("0.8.6"), QStringLiteral("2026-04-08"), QStringLiteral("DFNR AI Noise Reduction, Propagation Overlay, Community PR Blitz"), {
             {ChangeCategory::Feature, QStringLiteral("DFNR (DeepFilterNet3) AI noise reduction"), QStringLiteral("Fifth client-side NR option using deep neural filtering CPU-only, ~10ms latency, excellent in high-noise HF environments Configurable attenuation limit and post-filter beta Full mutual exclusion wi...")},
             {ChangeCategory::Feature, QStringLiteral("HF propagation conditions overlay"), QStringLiteral("K-index and Solar Flux Index displayed on panadapter Fetched from hamqsl.com, cached hourly, persists across restarts Toggle via View > Propagation Conditions")},
