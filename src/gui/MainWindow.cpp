@@ -1171,14 +1171,7 @@ MainWindow::MainWindow(QWidget* parent)
         if (on) {
             m_radioModel.createRxAudioStream();
         } else {
-            // Don't remove stream if TCI clients are connected (#1014)
-            bool tciNeedsStream = false;
-#ifdef HAVE_WEBSOCKETS
-            tciNeedsStream = m_tciServer && m_tciServer->clientCount() > 0;
-#endif
-            if (!tciNeedsStream) {
-                m_radioModel.removeRxAudioStream();
-            }
+            m_radioModel.removeRxAudioStream();
         }
     });
     connect(m_titleBar, &TitleBar::masterVolumeChanged, this, [this](int pct) {
@@ -1753,18 +1746,10 @@ MainWindow::MainWindow(QWidget* parent)
                 m_tciServer, &TciServer::onDaxAudioReady);
     }
 
-    // Create/remove audio stream based on TCI client demand (#1014).
-    // When PC Audio is off, a TCI client connecting still needs the stream.
-    connect(m_tciServer, &TciServer::clientCountChanged, this, [this](int count) {
-        bool pcAudio = AppSettings::instance().value("PcAudioEnabled", "True").toString() == "True";
-        if (count > 0 && !pcAudio && m_radioModel.isConnected()) {
-            m_radioModel.createRxAudioStream();
-            m_titleBar->setPcAudioEnabled(true);   // reflect TCI-forced stream in UI (#1071)
-        } else if (count == 0 && !pcAudio) {
-            m_radioModel.removeRxAudioStream();
-            m_titleBar->setPcAudioEnabled(false);  // restore button to saved preference (#1071)
-        }
-    });
+    // TCI client count changes no longer auto-create/remove the audio stream.
+    // Control-only TCI clients (StreamDeck) don't need audio, and auto-creating
+    // the stream overrode the user's explicit PC Audio toggle. Users who need
+    // TCI audio (WSJT-X) should enable PC Audio manually. (#1071)
 #endif
 
 #if defined(Q_OS_MAC) || defined(HAVE_PIPEWIRE)
