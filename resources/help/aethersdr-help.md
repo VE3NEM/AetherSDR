@@ -317,7 +317,7 @@ For SteppIR antennas controlled via MQTT:
 - MQTT uses QoS 0 (fire-and-forget) for both subscribe and publish.
 - The broker connection auto-reconnects with exponential backoff (5s–60s).
 - Username and password are optional; leave blank for unauthenticated brokers.
-- TLS is not currently supported; use a local or VPN-secured broker.
+- Enable the `TLS` checkbox to encrypt the connection. The port will switch automatically to 8883. Leave `CA cert` blank to use the system certificate bundle, or enter a path to a custom CA file for self-signed broker certificates.
 - Up to 12 publish buttons can be configured (4 rows × 3 columns).
 
 ## Status Bar

@@ -411,8 +411,9 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_appletPanel->mqttApplet(), &MqttApplet::connectRequested,
             this, [this](const QString& host, quint16 port,
                          const QString& user, const QString& pass,
-                         const QStringList& topics) {
-        m_mqttClient->connectToBroker(host, port, user, pass);
+                         const QStringList& topics,
+                         bool useTls, const QString& caFile) {
+        m_mqttClient->connectToBroker(host, port, user, pass, useTls, caFile);
         for (const QString& t : topics) {
             m_mqttClient->subscribe(t);
         }

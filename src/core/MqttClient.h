@@ -26,7 +26,9 @@ public:
 
     void connectToBroker(const QString& host, quint16 port,
                          const QString& username = {},
-                         const QString& password = {});
+                         const QString& password = {},
+                         bool useTls = false,
+                         const QString& caFile = {});
     void disconnect();
     void subscribe(const QString& topic);
     void unsubscribe(const QString& topic);
@@ -55,6 +57,8 @@ private:
     quint16 m_port{1883};
     QString m_username;
     QString m_password;
+    bool    m_useTls{false};
+    QString m_caFile;
     std::atomic<bool> m_connected{false};
     int m_reconnectAttempts{0};
 

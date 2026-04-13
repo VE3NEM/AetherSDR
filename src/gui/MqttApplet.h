@@ -4,6 +4,7 @@
 #include <QVector>
 #include <QJsonArray>
 
+class QCheckBox;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -39,7 +40,8 @@ public:
 signals:
     void connectRequested(const QString& host, quint16 port,
                           const QString& user, const QString& pass,
-                          const QStringList& topics);
+                          const QStringList& topics,
+                          bool useTls, const QString& caFile);
     void disconnectRequested();
     void displayValueChanged(const QString& key, const QString& value);
     void displayCleared();
@@ -61,6 +63,8 @@ private:
     QLineEdit*   m_userEdit{nullptr};
     QLineEdit*   m_passEdit{nullptr};
     QLineEdit*   m_topicsEdit{nullptr};
+    QCheckBox*   m_tlsCheck{nullptr};
+    QLineEdit*   m_caFileEdit{nullptr};
     QPushButton* m_enableBtn{nullptr};
     QLabel*      m_statusLabel{nullptr};
     QTextEdit*   m_messageLog{nullptr};

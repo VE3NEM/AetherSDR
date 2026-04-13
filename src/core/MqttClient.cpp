@@ -25,7 +25,7 @@ MqttClient::MqttClient(QObject* parent)
     connect(&m_reconnectTimer, &QTimer::timeout, this, [this] {
         if (!m_connected && !m_host.isEmpty()) {
             qCDebug(lcMqtt) << "MqttClient: reconnecting to" << m_host << m_port;
-            connectToBroker(m_host, m_port, m_username, m_password);
+            connectToBroker(m_host, m_port, m_username, m_password, m_useTls, m_caFile);
         }
     });
 
@@ -50,13 +50,17 @@ MqttClient::~MqttClient()
 
 void MqttClient::connectToBroker(const QString& host, quint16 port,
                                   const QString& username,
-                                  const QString& password)
+                                  const QString& password,
+                                  bool useTls,
+                                  const QString& caFile)
 {
 #ifdef HAVE_MQTT
     m_host = host;
     m_port = port;
     m_username = username;
     m_password = password;
+    m_useTls   = useTls;
+    m_caFile   = caFile;
     m_reconnectTimer.stop();
 
     if (m_mosq) {
@@ -82,7 +86,23 @@ void MqttClient::connectToBroker(const QString& host, quint16 port,
             password.isEmpty() ? nullptr : password.toUtf8().constData());
     }
 
-    qCDebug(lcMqtt) << "MqttClient: connecting to" << host << ":" << port;
+#ifdef HAVE_MQTT_TLS
+    if (useTls) {
+        // caFile: path to CA certificate bundle, or nullptr to use the system default.
+        const char* ca = caFile.isEmpty() ? nullptr : caFile.toUtf8().constData();
+        int tlsRc = mosquitto_tls_set(m_mosq, ca, nullptr, nullptr, nullptr, nullptr);
+        if (tlsRc != MOSQ_ERR_SUCCESS) {
+            qCWarning(lcMqtt) << "MqttClient: TLS setup failed:" << mosquitto_strerror(tlsRc);
+            emit connectionError(QString("TLS setup failed: %1").arg(mosquitto_strerror(tlsRc)));
+            return;
+        }
+        qCDebug(lcMqtt) << "MqttClient: TLS enabled"
+                        << (caFile.isEmpty() ? "(system CA bundle)" : caFile);
+    }
+#endif
+
+    qCDebug(lcMqtt) << "MqttClient: connecting to" << host << ":" << port
+                    << (useTls ? "[TLS]" : "");
 
     int rc = mosquitto_connect_async(m_mosq,
         host.toUtf8().constData(), port, 60);

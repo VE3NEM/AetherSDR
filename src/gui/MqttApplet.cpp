@@ -5,6 +5,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
+#include <QCheckBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -91,6 +92,41 @@ void MqttApplet::buildUI()
                              "Example: *rotator/pos, *ant/selected, station/log");
     grid->addWidget(m_topicsEdit, 4, 1);
 
+    // TLS row
+    auto* tlsLbl = new QLabel("TLS:");
+    tlsLbl->setStyleSheet(kLabelStyle);
+    grid->addWidget(tlsLbl, 5, 0);
+    m_tlsCheck = new QCheckBox;
+    m_tlsCheck->setChecked(s.value("MqttTls", "False").toString() == "True");
+    m_tlsCheck->setStyleSheet("QCheckBox { color: #8090a0; font-size: 10px; }");
+    m_tlsCheck->setToolTip("Enable TLS encryption (requires broker on port 8883)");
+    grid->addWidget(m_tlsCheck, 5, 1);
+
+    // CA certificate row (shown only when TLS is checked)
+    auto* caLbl = new QLabel("CA cert:");
+    caLbl->setStyleSheet(kLabelStyle);
+    grid->addWidget(caLbl, 6, 0);
+    m_caFileEdit = new QLineEdit(s.value("MqttCaFile", "").toString());
+    m_caFileEdit->setStyleSheet(kEditStyle);
+    m_caFileEdit->setPlaceholderText("optional, blank = system CA bundle");
+    m_caFileEdit->setToolTip("Path to CA certificate file.\nLeave blank to use the system CA bundle.");
+    grid->addWidget(m_caFileEdit, 6, 1);
+
+    // Show/hide CA row based on TLS checkbox state
+    auto updateCaVisibility = [caLbl, this](bool checked) {
+        caLbl->setVisible(checked);
+        m_caFileEdit->setVisible(checked);
+        // Auto-switch port between 1883 and 8883
+        QString port = m_portEdit->text().trimmed();
+        if (checked && port == "1883") {
+            m_portEdit->setText("8883");
+        } else if (!checked && port == "8883") {
+            m_portEdit->setText("1883");
+        }
+    };
+    updateCaVisibility(m_tlsCheck->isChecked());
+    connect(m_tlsCheck, &QCheckBox::toggled, this, updateCaVisibility);
+
     vbox->addLayout(grid);
 
     // Enable button + status
@@ -156,11 +192,13 @@ void MqttApplet::buildUI()
             m_enableBtn->setStyleSheet(kBtnOff);
         } else {
             auto& ss = AppSettings::instance();
-            ss.setValue("MqttHost", m_hostEdit->text().trimmed());
-            ss.setValue("MqttPort", m_portEdit->text().trimmed());
-            ss.setValue("MqttUser", m_userEdit->text().trimmed());
-            ss.setValue("MqttPass", m_passEdit->text().trimmed());
+            ss.setValue("MqttHost",   m_hostEdit->text().trimmed());
+            ss.setValue("MqttPort",   m_portEdit->text().trimmed());
+            ss.setValue("MqttUser",   m_userEdit->text().trimmed());
+            ss.setValue("MqttPass",   m_passEdit->text().trimmed());
             ss.setValue("MqttTopics", m_topicsEdit->text().trimmed());
+            ss.setValue("MqttTls",    m_tlsCheck->isChecked() ? "True" : "False");
+            ss.setValue("MqttCaFile", m_caFileEdit->text().trimmed());
             ss.save();
 
             // Parse topics — * prefix means display on panadapter
@@ -181,7 +219,9 @@ void MqttApplet::buildUI()
                 m_portEdit->text().trimmed().toUShort(),
                 m_userEdit->text().trimmed(),
                 m_passEdit->text().trimmed(),
-                topicNames);
+                topicNames,
+                m_tlsCheck->isChecked(),
+                m_caFileEdit->text().trimmed());
 
             m_enableBtn->setText("On");
             m_enableBtn->setStyleSheet(kBtnOn);
