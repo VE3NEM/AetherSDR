@@ -94,6 +94,14 @@ jobs:
               AppDir/usr/bin/
           fi
 
+          # Bundle OpenSSL for MQTT TLS support (#1341, #1362)
+          for lib in libssl.so.3 libcrypto.so.3; do
+            src=$(find /usr/lib -name "$lib" -print -quit 2>/dev/null)
+            if [ -n "$src" ]; then
+              cp -v "$src" AppDir/usr/lib/
+            fi
+          done
+
           # Bundle Qt6 multimedia backend plugin
           if [ "${{ matrix.use_aqt }}" = "true" ]; then
             QT_PLUGIN_PATH=${{ github.workspace }}/Qt/6.7.3/gcc_64/plugins
