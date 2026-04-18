@@ -2665,6 +2665,7 @@ void MainWindow::buildMenuBar()
                 QTimer::singleShot(500, this, [this]() {
                     m_radioModel.createRxAudioStream();
                 });
+                updateNr2Availability();  // Disable NR2 if switching to Opus (#1597)
             }
         });
         dlg->show();
@@ -4304,6 +4305,7 @@ void MainWindow::onConnectionStateChanged(bool connected)
                     vfo->setDiversityAllowed(divAllowed);
         }
         audioStartRx();
+        updateNr2Availability();  // Disable NR2 if connected via SmartLink/Opus (#1597)
         // TX audio stream will start when the radio assigns a stream ID
         // Auto-hide the connection dialog on successful connect
         m_connPanel->hide();
@@ -5980,8 +5982,14 @@ void MainWindow::wirePanadapter(PanadapterApplet* applet)
     // ── NR2/RN2 overlay toggle → AudioEngine ───────────────────────────
     // Button sync back to overlay + VFO handled by nr2/rn2EnabledChanged above.
     connect(menu, &SpectrumOverlayMenu::nr2Toggled,
-            this, [this](bool on) {
+            this, [this, menu](bool on) {
         if (on) {
+            // NR2 amplifies Opus codec artifacts → disable when compressed audio active (#1597)
+            if (m_radioModel.audioCompressionParam() == "opus") {
+                QMetaObject::invokeMethod(m_audio, [this]() { m_audio->setNr2Enabled(false); });
+                statusBar()->showMessage("NR2 is not available with compressed (SmartLink) audio", 4000);
+                return;
+            }
             QMetaObject::invokeMethod(m_audio, [this]() { m_audio->setRn2Enabled(false); });
             enableNr2WithWisdom();
         } else {
@@ -6197,8 +6205,15 @@ void MainWindow::wireVfoWidget(VfoWidget* w, SliceModel* s)
     });
 
     // NR2 toggle with FFTW wisdom generation — wired once per VFO, never disconnected
-    connect(w, &VfoWidget::nr2Toggled, this, [this](bool on) {
+    connect(w, &VfoWidget::nr2Toggled, this, [this, w](bool on) {
         if (!on) { QMetaObject::invokeMethod(m_audio, [this]() { m_audio->setNr2Enabled(false); }); return; }
+        // NR2 amplifies Opus codec artifacts → disable when compressed audio is active (#1597)
+        if (m_radioModel.audioCompressionParam() == "opus") {
+            QSignalBlocker blocker(w->nr2Button());
+            w->nr2Button()->setChecked(false);
+            statusBar()->showMessage("NR2 is not available with compressed (SmartLink) audio", 4000);
+            return;
+        }
         enableNr2WithWisdom();
     });
     connect(w, &VfoWidget::nr2RightClicked,
@@ -6236,6 +6251,42 @@ void MainWindow::wireVfoWidget(VfoWidget* w, SliceModel* s)
 
 // wireActiveVfoSignals removed — NR2/RN2/RADE are now wired permanently
 // in wireVfoWidget() so connections survive focus switches (#227).
+
+void MainWindow::updateNr2Availability()
+{
+    bool opusActive = (m_radioModel.audioCompressionParam() == "opus");
+    const QString tooltip = opusActive
+        ? "NR2 is not available with compressed (SmartLink) audio"
+        : "Client-side spectral noise reduction (Ephraim-Malah MMSE). Right-click for NR2 settings.";
+
+    // If Opus just became active and NR2 is running, disable it
+    if (opusActive && m_audio->nr2Enabled()) {
+        QMetaObject::invokeMethod(m_audio, [this]() { m_audio->setNr2Enabled(false); });
+        statusBar()->showMessage("NR2 disabled — not available with compressed (SmartLink) audio", 4000);
+    }
+
+    // Update all NR2 buttons: VFO widgets and spectrum overlay menus
+    if (m_panStack) {
+        for (auto* applet : m_panStack->allApplets()) {
+            // Overlay menu NR2 button
+            if (auto* menu = applet->spectrumWidget()->overlayMenu()) {
+                if (auto* btn = menu->dspNr2Button()) {
+                    btn->setEnabled(!opusActive);
+                    btn->setToolTip(tooltip);
+                }
+            }
+            // VFO NR2 buttons (one per slice on this pan)
+            for (auto* s : m_radioModel.slices()) {
+                if (auto* vfo = applet->spectrumWidget()->vfoWidget(s->sliceId())) {
+                    if (auto* btn = vfo->nr2Button()) {
+                        btn->setEnabled(!opusActive);
+                        btn->setToolTip(tooltip);
+                    }
+                }
+            }
+        }
+    }
+}
 
 void MainWindow::enableNr2WithWisdom()
 {

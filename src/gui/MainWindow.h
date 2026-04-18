@@ -125,6 +125,7 @@ private:
     SpectrumWidget* spectrumForSlice(SliceModel* s) const;
     void wireVfoWidget(VfoWidget* w, SliceModel* s);
     void enableNr2WithWisdom();  // Wisdom-gated NR2 enable (shared by VFO + overlay)
+    void updateNr2Availability(); // Disable NR2 when Opus is active (#1597)
     void registerShortcutActions();
     void applyUiScale(int pct);
     void stepUiScale(int direction);  // +1 = zoom in, -1 = zoom out
