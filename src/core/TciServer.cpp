@@ -193,7 +193,7 @@ void TciServer::stop()
         cs.socket->close();
         cs.socket->deleteLater();
         delete cs.protocol;
-        delete cs.resampler;
+        qDeleteAll(cs.resamplers);
     }
     m_clients.clear();
     releaseDaxForTci();
@@ -253,8 +253,8 @@ void TciServer::onNewConnection()
         ClientState cs;
         cs.socket = ws;
         cs.protocol = protocol;
-        // Default 48kHz — create 24→48kHz resampler for RX audio
-        cs.resampler = new Resampler(24000.0, 48000.0, 4096);
+        // Resamplers are created lazily per-channel in onDaxAudioReady()
+        // so each DAX channel has its own stateful r8brain instance (#1806).
         m_clients.append(cs);
 
         connect(ws, &QWebSocket::textMessageReceived,
@@ -307,7 +307,7 @@ void TciServer::onClientDisconnected()
                 }
             }
             delete m_clients[i].protocol;
-            delete m_clients[i].resampler;
+            qDeleteAll(m_clients[i].resamplers);
             m_clients.removeAt(i);
 
             // Release DAX if no remaining clients want audio (#1331)
@@ -382,12 +382,11 @@ void TciServer::onTextMessage(const QString& msg)
             int rate = trimmed.mid(colonIdx2 + 1).toInt();
             if (rate == 8000 || rate == 12000 || rate == 24000 || rate == 48000) {
                 client.audioSampleRate = rate;
-                // Create or destroy resampler as needed
-                delete client.resampler;
-                if (rate != 24000)
-                    client.resampler = new Resampler(24000.0, rate, 4096);
-                else
-                    client.resampler = nullptr;
+                // Discard all per-channel resamplers — they were built for
+                // the old rate and carry stale filter history.  New instances
+                // at the correct rate are lazily created in onDaxAudioReady().
+                qDeleteAll(client.resamplers);
+                client.resamplers.clear();
                 qCInfo(lcCat) << "TCI: audio sample rate set to" << rate
                               << "for" << ws->peerAddress().toString();
             }
@@ -716,9 +715,12 @@ void TciServer::onRxAudioReady(const QByteArray& pcm)
         int audioFrames = stereoFrames;
         QByteArray resampledBuf;
 
-        // Resample if client wants a different rate (float32 I/O)
-        if (cs.resampler) {
-            resampledBuf = cs.resampler->processStereoToStereo(src, stereoFrames);
+        // Resample if client wants a different rate (float32 I/O).
+        // Non-DAX path: use channel key 0 (DAX channels are 1-based).
+        if (cs.audioSampleRate != 24000) {
+            if (!cs.resamplers.contains(0))
+                cs.resamplers[0] = new Resampler(24000.0, cs.audioSampleRate, 4096);
+            resampledBuf = cs.resamplers[0]->processStereoToStereo(src, stereoFrames);
             audioSrc = reinterpret_cast<const float*>(resampledBuf.constData());
             audioFrames = resampledBuf.size() / (2 * static_cast<int>(sizeof(float)));
         }
@@ -830,9 +832,20 @@ void TciServer::onDaxAudioReady(int channel, const QByteArray& pcm)
 
         int accumFrames = accumBuf.size() / (2 * static_cast<int>(sizeof(float)));
 
-        // If no resampler, flush immediately (native 24kHz pass-through)
-        // If resampling, wait for enough data to feed r8brain cleanly
-        if (cs.resampler && accumFrames < kAccumMinFrames) {
+        // Obtain (or lazily create) the per-channel resampler.
+        // Each DAX channel needs its own stateful r8brain instance so that
+        // filter history from slice A cannot bleed into slice B (#1806).
+        // No resampler is needed when the client requested native 24 kHz.
+        Resampler* resampler = nullptr;
+        if (cs.audioSampleRate != 24000) {
+            if (!cs.resamplers.contains(channel))
+                cs.resamplers[channel] = new Resampler(24000.0, cs.audioSampleRate, 4096);
+            resampler = cs.resamplers[channel];
+        }
+
+        // If resampling, wait for enough data to feed r8brain cleanly.
+        // Native 24kHz path flushes immediately.
+        if (resampler && accumFrames < kAccumMinFrames) {
             continue;
         }
 
@@ -840,8 +853,8 @@ void TciServer::onDaxAudioReady(int channel, const QByteArray& pcm)
         int audioFrames = accumFrames;
         QByteArray resampledBuf;
 
-        if (cs.resampler) {
-            resampledBuf = cs.resampler->processStereoToStereo(audioSrc, audioFrames);
+        if (resampler) {
+            resampledBuf = resampler->processStereoToStereo(audioSrc, audioFrames);
             audioSrc = reinterpret_cast<const float*>(resampledBuf.constData());
             audioFrames = resampledBuf.size() / (2 * static_cast<int>(sizeof(float)));
         }
