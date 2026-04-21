@@ -4115,7 +4115,10 @@ void SpectrumWidget::drawSpectrum(QPainter& p, const QRect& r)
     for (int i = 0; i < n; ++i) {
         const float dbm  = m_smoothed[i];
         const float norm = qBound(0.0f, (m_refLevel - dbm) / m_dynamicRange, 1.0f);
-        pts[i].x = r.left() + static_cast<int>(static_cast<float>(i) / (n - 1) * w);
+        // Pixel-center — matches the waterfall's (x + 0.5) * bins / destWidth
+        // mapping so the same frequency lands on the same x-column in both
+        // panes, including at the edges (#1690 follow-up).
+        pts[i].x = r.left() + static_cast<int>((i + 0.5f) * w / n);
         pts[i].y = r.top()  + qMin(static_cast<int>(norm * h), h - 1);
         pts[i].t = 1.0f - norm;  // 0=noise floor, 1=strong signal
     }
