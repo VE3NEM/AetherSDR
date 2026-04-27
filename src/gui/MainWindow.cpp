@@ -9630,7 +9630,7 @@ void MainWindow::registerShortcutActions()
     m_shortcutManager.registerAction("atu_start", "ATU Start", "TX",
         QKeySequence(), [this]() {
             if (!m_radioModel.isConnected()) return;
-            m_radioModel.sendCommand("atu start");
+            m_radioModel.transmitModel().atuStart();
         });
     m_shortcutManager.registerAction("tune_toggle", "TUNE Toggle", "TX",
         QKeySequence(), [this]() {
