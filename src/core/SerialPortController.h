@@ -4,20 +4,34 @@
 #include <QString>
 
 #ifdef HAVE_SERIALPORT
+#include <QElapsedTimer>
+#ifndef Q_OS_WIN
 #include <QSerialPort>
 #include <QTimer>
-#include <QElapsedTimer>
+#endif
+#endif
+
+#ifdef Q_OS_WIN
+#include <atomic>
+#include <QThread>
 #endif
 
 namespace AetherSDR {
 
 // Controls DTR/RTS lines on a USB-serial adapter for hardware PTT
-// and CW keying, and polls CTS/DSR for external PTT and CW key/paddle input.
+// and CW keying, and monitors CTS/DSR for external PTT and CW key/paddle input.
 //
 // Output: Assert DTR/RTS when transmitting (amplifier keying, sequencer)
-// Input:  Poll CTS/DSR for foot switch PTT, straight key, or iambic paddle
+// Input:  Monitor CTS/DSR for foot switch PTT, straight key, or iambic paddle
 //
-// Requires Qt6::SerialPort. Compiles to a no-op stub without HAVE_SERIALPORT.
+// On Windows, uses Win32 WaitCommEvent directly — QSerialPort::pinoutSignals()
+// (backed by GetCommModemStatus) returns stale data on FTDI and similar drivers
+// unless called in the context of a WaitCommEvent completion.
+//
+// On Linux/macOS, polls QSerialPort::pinoutSignals() on a timer.
+//
+// Requires Qt6::SerialPort on non-Windows. Compiles to a no-op stub without
+// HAVE_SERIALPORT on non-Windows platforms.
 
 class SerialPortController : public QObject {
     Q_OBJECT
@@ -94,18 +108,43 @@ private:
     bool m_dsrActiveHigh{false};
     bool m_paddleSwap{false};
 
-#ifdef HAVE_SERIALPORT
-    QSerialPort m_port;
-    QTimer      m_pollTimer;
-    bool        m_lastCtsActive{false};
-    bool        m_lastDsrActive{false};
-    bool        m_lastKeyDown{false};
-    bool        m_lastDitActive{false};
-    bool        m_lastDahActive{false};
-    bool        m_pollLogged{false};
+#if defined(HAVE_SERIALPORT) || defined(Q_OS_WIN)
+    // Shared input tracking state (always accessed on this object's thread)
+    bool          m_lastCtsActive{false};
+    bool          m_lastDsrActive{false};
+    bool          m_lastKeyDown{false};
+    bool          m_lastDitActive{false};
+    bool          m_lastDahActive{false};
     QElapsedTimer m_debounceTimer;
-    static constexpr int POLL_INTERVAL_MS = 10;
     static constexpr int DEBOUNCE_MS = 20;
+#endif
+
+// On Windows, HAVE_SERIALPORT is typically defined (Qt6::SerialPort ships for Windows),
+// but the QSerialPort code path below is NOT used — the Win32 WaitCommEvent path takes over.
+// The #ifdef HAVE_SERIALPORT guards in dependent files (e.g. MainWindow) are correct.
+#ifdef Q_OS_WIN
+    // Win32 path: owns the COM port handle exclusively for WaitCommEvent-based detection
+    void*         m_hWin{nullptr};      // Win32 HANDLE cast to void*; nullptr = closed
+    QString       m_winPortName;
+    int           m_winBaudRate{0};
+    QThread*      m_winWatchThread{nullptr};
+    std::atomic<bool> m_stopWinWatch{false};
+
+    void runWinWatcher();
+
+private slots:
+    void processWinPinChange(bool dsrRaw, bool ctsRaw);
+
+#elif defined(HAVE_SERIALPORT)
+    // Non-Windows path: poll via QSerialPort timer
+    QSerialPort   m_port;
+    QTimer        m_pollTimer;
+    bool          m_pollLogged{false};
+    // Diagnostic state for pollInputPins() logging — kept as members (not statics)
+    // so a hypothetical second instance doesn't share state.
+    QSerialPort::PinoutSignals m_lastRawPins{};
+    bool                       m_lastDebounceLogged{false};
+    static constexpr int POLL_INTERVAL_MS = 10;
 
 private slots:
     void pollInputPins();

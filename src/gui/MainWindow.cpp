@@ -3720,10 +3720,20 @@ MainWindow::~MainWindow()
 
     // Stop external controller thread (#502)
     if (m_extCtrlThread && m_extCtrlThread->isRunning()) {
+        // Close serial port on its own thread before stopping it to avoid
+        // the cross-thread QObject access crash (QSerialPort has thread affinity
+        // to m_extCtrlThread; calling close() from main thread hits a fatal assert).
+#ifdef HAVE_SERIALPORT
+        QMetaObject::invokeMethod(m_serialPort, [this] { m_serialPort->close(); },
+                                  Qt::BlockingQueuedConnection);
+#endif
         m_extCtrlThread->quit();
         m_extCtrlThread->wait(3000);
     }
 #ifdef HAVE_SERIALPORT
+    // Move back to main thread so the destructor runs safely here.
+    m_serialPort->moveToThread(QThread::currentThread());
+    m_flexControl->moveToThread(QThread::currentThread());
     delete m_serialPort;
     delete m_flexControl;
 #endif
@@ -4771,6 +4781,11 @@ void MainWindow::buildMenuBar()
         m_radioSetupDialog = dlg;
         connect(dlg, &RadioSetupDialog::txBandSettingsRequested,
                 m_txBandAction, &QAction::trigger);
+#ifdef HAVE_SERIALPORT
+        connect(dlg, &RadioSetupDialog::serialSettingsChanged, this, [this]() {
+            QMetaObject::invokeMethod(m_serialPort, [this] { m_serialPort->loadSettings(); });
+        });
+#endif
         connect(dlg, &QDialog::finished, this, [this, prevComp]() {
 #ifdef HAVE_SERIALPORT
             // Re-load serial port settings if changed (on worker thread)

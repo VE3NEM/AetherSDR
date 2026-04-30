@@ -44,6 +44,11 @@ find_package(Qt6 6.2 REQUIRED COMPONENTS
     Test
 )
 option(REQUIRE_SERIALPORT "Fail if Qt6 SerialPort is not found (use for release builds)" OFF)
+# Note: on Windows the SerialPortController uses raw Win32 WaitCommEvent for
+# DSR/CTS edge detection (FTDI VCP drivers don't refresh
+# GetCommModemStatus outside a WaitCommEvent completion).  Qt6::SerialPort
+# is still useful on Linux/macOS for pin polling, so the find_package call
+# stays platform-agnostic.
 if(REQUIRE_SERIALPORT)
     find_package(Qt6 REQUIRED COMPONENTS SerialPort)
 else()
