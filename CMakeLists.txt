@@ -499,6 +499,7 @@ set(MODEL_SOURCES
 )
 
 set(GUI_SOURCES
+    src/gui/ThemeColors.cpp
     src/gui/MainWindow.cpp
     src/gui/ConnectionPanel.cpp
     src/gui/ClientDisconnectDialog.cpp
